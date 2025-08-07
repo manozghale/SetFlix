@@ -13,6 +13,7 @@ class MovieTableViewCell: UITableViewCell {
   private let posterImageView = UIImageView()
   private let titleLabel = UILabel()
   private let yearLabel = UILabel()
+  private let favoriteIndicator = UIImageView()
   private let stackView = UIStackView()
 
   // MARK: - Properties
@@ -50,6 +51,13 @@ class MovieTableViewCell: UITableViewCell {
     yearLabel.textColor = .secondaryLabel
     yearLabel.translatesAutoresizingMaskIntoConstraints = false
 
+    // Configure favorite indicator
+    favoriteIndicator.image = UIImage(systemName: "heart.fill")
+    favoriteIndicator.tintColor = .systemRed
+    favoriteIndicator.contentMode = .scaleAspectFit
+    favoriteIndicator.translatesAutoresizingMaskIntoConstraints = false
+    favoriteIndicator.isHidden = true  // Hidden by default
+
     // Configure stack view for text content
     stackView.axis = .vertical
     stackView.spacing = 4
@@ -64,6 +72,7 @@ class MovieTableViewCell: UITableViewCell {
     // Add subviews to content view
     contentView.addSubview(posterImageView)
     contentView.addSubview(stackView)
+    contentView.addSubview(favoriteIndicator)
 
     // Configure cell
     backgroundColor = .systemBackground
@@ -83,6 +92,13 @@ class MovieTableViewCell: UITableViewCell {
       stackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
       stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
+      // Favorite indicator constraints
+      favoriteIndicator.trailingAnchor.constraint(
+        equalTo: contentView.trailingAnchor, constant: -16),
+      favoriteIndicator.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+      favoriteIndicator.widthAnchor.constraint(equalToConstant: 24),
+      favoriteIndicator.heightAnchor.constraint(equalToConstant: 24),
+
       // Content view height
       contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 100),
     ])
@@ -92,6 +108,9 @@ class MovieTableViewCell: UITableViewCell {
   func configure(with movie: Movie) {
     titleLabel.text = movie.title
     yearLabel.text = extractYear(from: movie.releaseDate)
+
+    // Show/hide favorite indicator
+    favoriteIndicator.isHidden = !movie.isFavorite
 
     // Load poster image
     if let posterPath = movie.posterPath {

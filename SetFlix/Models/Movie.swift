@@ -12,6 +12,7 @@ struct Movie: Codable, Identifiable, Equatable {
   let title: String
   let releaseDate: String?
   let posterPath: String?
+  var isFavorite: Bool
 
   // Custom coding keys to handle snake_case from API
   enum CodingKeys: String, CodingKey {
@@ -19,14 +20,43 @@ struct Movie: Codable, Identifiable, Equatable {
     case title
     case releaseDate
     case posterPath
+    // Note: isFavorite is not included in CodingKeys since it's not part of the API response
   }
 
   // Manual initializer for creating Movie objects programmatically
-  init(id: Int, title: String, releaseDate: String?, posterPath: String?) {
+  init(id: Int, title: String, releaseDate: String?, posterPath: String?, isFavorite: Bool = false)
+  {
     self.id = id
     self.title = title
     self.releaseDate = releaseDate
     self.posterPath = posterPath
+    self.isFavorite = isFavorite
+  }
+
+  // Custom decoder to handle the fact that isFavorite is not in the API response
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+
+    id = try container.decode(Int.self, forKey: .id)
+    title = try container.decode(String.self, forKey: .title)
+
+    // Handle release_date field - convert "nil" string to actual nil
+    if let releaseDateString = try container.decodeIfPresent(String.self, forKey: .releaseDate) {
+      releaseDate =
+        (releaseDateString == "nil" || releaseDateString.isEmpty) ? nil : releaseDateString
+    } else {
+      releaseDate = nil
+    }
+
+    // Handle poster_path field - convert "nil" string to actual nil
+    if let posterPathString = try container.decodeIfPresent(String.self, forKey: .posterPath) {
+      posterPath = (posterPathString == "nil" || posterPathString.isEmpty) ? nil : posterPathString
+    } else {
+      posterPath = nil
+    }
+
+    // Default to false since this is not part of the API response
+    isFavorite = false
   }
 
   // Computed property for poster URL

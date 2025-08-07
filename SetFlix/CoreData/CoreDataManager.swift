@@ -163,6 +163,35 @@ class CoreDataManager {
     return result
   }
 
+  /// Get favorite status for multiple movies efficiently
+  func getFavoriteStatus(for movieIds: [Int]) -> [Int: Bool] {
+    var result: [Int: Bool] = [:]
+
+    context.performAndWait {
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+      request.predicate = NSPredicate(
+        format: "id IN %@ AND isFavorite == YES", movieIds.map { NSNumber(value: $0) })
+
+      do {
+        let favoriteMovies = try context.fetch(request)
+        let favoriteIds = Set(favoriteMovies.map { Int($0.id) })
+
+        // Set all movies to false by default, then mark favorites as true
+        for movieId in movieIds {
+          result[movieId] = favoriteIds.contains(movieId)
+        }
+      } catch {
+        print("Error fetching favorite status: \(error)")
+        // If there's an error, assume all movies are not favorites
+        for movieId in movieIds {
+          result[movieId] = false
+        }
+      }
+    }
+
+    return result
+  }
+
   func toggleFavorite(for movieId: Int) -> Bool {
     let backgroundContext = self.backgroundContext
     var result = false
@@ -229,14 +258,22 @@ class CoreDataManager {
         let movieEntity: MovieEntity
         if let existing = existingMovie {
           movieEntity = existing
+          // Preserve existing favorite status for existing movies
+          print(
+            "🔄 Updating existing movie '\(movie.title)' (ID: \(movie.id)) - preserving favorite status: \(movieEntity.isFavorite)"
+          )
         } else {
           movieEntity = MovieEntity(context: backgroundContext)
           movieEntity.id = Int64(movie.id)
+          movieEntity.isFavorite = false  // Only set to false for new movies
+          print(
+            "🆕 Creating new movie '\(movie.title)' (ID: \(movie.id)) - setting favorite status to false"
+          )
         }
 
         movieEntity.title = movie.title
         movieEntity.posterURL = movie.posterURL
-        movieEntity.isFavorite = false
+        // Note: isFavorite is only set for new movies, existing movies keep their status
 
         // Convert string date to Date (handle optional release date)
         if let releaseDateString = movie.releaseDate {

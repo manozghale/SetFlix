@@ -15,6 +15,13 @@ protocol MovieRepository {
   func getMovieChanges(startDate: String, endDate: String, page: Int) async throws
     -> MovieChangesResponse
 
+  // Favorites methods
+  func getFavorites() async throws -> [Movie]
+  func saveToFavorites(_ movie: Movie) async throws
+  func removeFromFavorites(_ movieId: Int) async throws
+  func toggleFavorite(_ movieId: Int) async throws -> Bool
+  func isFavorite(_ movieId: Int) async throws -> Bool
+
   // Caching methods
   func getCachedMovies() -> MovieSearchResponse
   func getCachedMovies(for query: String) -> MovieSearchResponse
@@ -181,6 +188,27 @@ class MovieRepositoryImpl: MovieRepository {
     } else {
       throw NetworkError.noInternetConnection
     }
+  }
+
+  // MARK: - Favorites Methods
+  func getFavorites() async throws -> [Movie] {
+    return try await cacheManager.getFavorites()
+  }
+
+  func saveToFavorites(_ movie: Movie) async throws {
+    try await cacheManager.saveToFavorites(movie)
+  }
+
+  func removeFromFavorites(_ movieId: Int) async throws {
+    try await cacheManager.removeFromFavorites(movieId)
+  }
+
+  func toggleFavorite(_ movieId: Int) async throws -> Bool {
+    return try await cacheManager.toggleFavorite(movieId)
+  }
+
+  func isFavorite(_ movieId: Int) async throws -> Bool {
+    return try await cacheManager.isFavorite(movieId)
   }
 
   // MARK: - Caching Methods

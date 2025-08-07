@@ -50,14 +50,14 @@ class MovieSearchViewController: UIViewController {
     title = "Movies"
     navigationController?.navigationBar.prefersLargeTitles = true
 
-    // Add menu button to navigation bar
-    let menuButton = UIBarButtonItem(
-      image: UIImage(systemName: "list.bullet"),
+    // Add favorites button to navigation bar
+    let favoritesButton = UIBarButtonItem(
+      image: UIImage(systemName: "heart.fill"),
       style: .plain,
       target: self,
-      action: #selector(menuButtonTapped)
+      action: #selector(favoritesButtonTapped)
     )
-    navigationItem.rightBarButtonItem = menuButton
+    navigationItem.rightBarButtonItem = favoritesButton
 
     // Add subviews
     view.addSubview(tableView)
@@ -238,9 +238,9 @@ class MovieSearchViewController: UIViewController {
   }
 
   // MARK: - Actions
-  @objc private func menuButtonTapped() {
-    // TODO: Implement menu functionality
-    print("Menu button tapped")
+  @objc private func favoritesButtonTapped() {
+    let favoritesViewController = FavoritesViewController()
+    navigationController?.pushViewController(favoritesViewController, animated: true)
   }
 
   @objc private func refreshData() {

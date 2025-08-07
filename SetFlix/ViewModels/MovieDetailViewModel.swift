@@ -46,6 +46,7 @@ class MovieDetailViewModel: ObservableObject {
   init(movie: Movie, repository: MovieRepository = MovieRepositoryFactory.createRepository()) {
     self.movie = movie
     self.repository = repository
+    loadFavoriteStatus()
   }
 
   // MARK: - Public Methods
@@ -59,9 +60,18 @@ class MovieDetailViewModel: ObservableObject {
 
   /// Toggle favorite status
   func toggleFavorite() {
-    // This would be implemented when Core Data is re-enabled
-    // For now, just toggle the local state
-    isFavorite.toggle()
+    Task {
+      do {
+        let newStatus = try await repository.toggleFavorite(movie.id)
+        await MainActor.run {
+          self.isFavorite = newStatus
+        }
+      } catch {
+        await MainActor.run {
+          self.errorMessage = "Failed to update favorite status: \(error.localizedDescription)"
+        }
+      }
+    }
   }
 
   /// Clear error message
@@ -87,6 +97,19 @@ class MovieDetailViewModel: ObservableObject {
         errorMessage = "Failed to load movie details: \(error.localizedDescription)"
       } else {
         errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
+      }
+    }
+  }
+
+  private func loadFavoriteStatus() {
+    Task {
+      do {
+        let status = try await repository.isFavorite(movie.id)
+        await MainActor.run {
+          self.isFavorite = status
+        }
+      } catch {
+        print("Failed to load favorite status: \(error)")
       }
     }
   }

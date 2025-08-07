@@ -19,6 +19,71 @@ class CacheManager {
   private let popularMoviesCacheExpiryDays = 1
   private let movieDetailsCacheExpiryDays = 30
 
+  // MARK: - Favorites Methods
+
+  func getFavorites() async throws -> [Movie] {
+    let backgroundContext = coreDataManager.getBackgroundContext()
+    var movies: [Movie] = []
+
+    backgroundContext.performAndWait {
+      let favoriteEntities = coreDataManager.getFavoriteMovies()
+      movies = favoriteEntities.compactMap { entity in
+        guard let title = entity.title else { return nil }
+        return Movie(
+          id: Int(entity.id),
+          title: title,
+          releaseDate: entity.releaseDate?.formatted(date: .numeric, time: .omitted),
+          posterPath: entity.posterURL
+        )
+      }
+    }
+
+    return movies
+  }
+
+  func saveToFavorites(_ movie: Movie) async throws {
+    let backgroundContext = coreDataManager.getBackgroundContext()
+
+    backgroundContext.performAndWait {
+      coreDataManager.saveMovie(movie, isFavorite: true)
+    }
+  }
+
+  func removeFromFavorites(_ movieId: Int) async throws {
+    let backgroundContext = coreDataManager.getBackgroundContext()
+
+    backgroundContext.performAndWait {
+      if let movieEntity = coreDataManager.getMovie(by: movieId) {
+        movieEntity.isFavorite = false
+        coreDataManager.saveBackgroundContext(backgroundContext)
+      }
+    }
+  }
+
+  func toggleFavorite(_ movieId: Int) async throws -> Bool {
+    let backgroundContext = coreDataManager.getBackgroundContext()
+    var result = false
+
+    backgroundContext.performAndWait {
+      result = coreDataManager.toggleFavorite(for: movieId)
+    }
+
+    return result
+  }
+
+  func isFavorite(_ movieId: Int) async throws -> Bool {
+    let backgroundContext = coreDataManager.getBackgroundContext()
+    var result = false
+
+    backgroundContext.performAndWait {
+      if let movieEntity = coreDataManager.getMovie(by: movieId) {
+        result = movieEntity.isFavorite
+      }
+    }
+
+    return result
+  }
+
   // MARK: - Search Results Caching
 
   func saveSearchResults(_ response: MovieSearchResponse, for query: String) {
@@ -29,14 +94,44 @@ class CacheManager {
       let pageEntity = self.getOrCreatePageEntity(
         for: query, page: response.page, in: backgroundContext)
 
-      // Clear existing movies for this page
+      // Clear existing movies for this page (but preserve their favorite status)
       if let existingMovies = pageEntity.movies?.allObjects as? [MovieEntity] {
-        existingMovies.forEach { backgroundContext.delete($0) }
+        // Store favorite status before deleting
+        var favoriteStatus: [Int: Bool] = [:]
+        for movieEntity in existingMovies {
+          favoriteStatus[Int(movieEntity.id)] = movieEntity.isFavorite
+        }
+
+        // Remove from page but don't delete the entities
+        existingMovies.forEach { movieEntity in
+          pageEntity.removeFromMovies(movieEntity)
+          movieEntity.removeFromPages(pageEntity)
+        }
+
+        print(
+          "📱 Preserved favorite status for \(favoriteStatus.count) movies before updating search results"
+        )
       }
 
-      // Save new movies
+      // Save new movies or update existing ones
       for movie in response.results {
-        let movieEntity = self.createMovieEntity(from: movie, in: backgroundContext)
+        let movieEntity = self.getOrCreateMovieEntity(id: movie.id, in: backgroundContext)
+
+        // Update movie data
+        movieEntity.title = movie.title
+        movieEntity.posterURL = movie.posterURL
+
+        if let releaseDateString = movie.releaseDate {
+          let dateFormatter = DateFormatter()
+          dateFormatter.dateFormat = "yyyy-MM-dd"
+          movieEntity.releaseDate = dateFormatter.date(from: releaseDateString)
+        }
+
+        // Preserve existing favorite status
+        if movieEntity.isFavorite {
+          print("💖 Preserving favorite status for movie '\(movie.title)' (ID: \(movie.id))")
+        }
+
         pageEntity.addToMovies(movieEntity)
         // Ensure the inverse relationship is also set
         movieEntity.addToPages(pageEntity)

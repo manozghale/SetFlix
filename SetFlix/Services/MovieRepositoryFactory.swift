@@ -188,4 +188,40 @@ class MockMovieRepository: MovieRepository {
     // Mock implementation - always return true for testing
     return true
   }
+
+  // MARK: - Favorites Methods
+  func getFavorites() async throws -> [Movie] {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 200_000_000)  // 0.2 seconds
+
+    // Return first two movies as favorites for testing
+    return Array(mockMovies.prefix(2))
+  }
+
+  func saveToFavorites(_ movie: Movie) async throws {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
+    print("Mock: Would save movie '\(movie.title)' to favorites")
+  }
+
+  func removeFromFavorites(_ movieId: Int) async throws {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
+    print("Mock: Would remove movie ID \(movieId) from favorites")
+  }
+
+  func toggleFavorite(_ movieId: Int) async throws -> Bool {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
+    print("Mock: Would toggle favorite for movie ID \(movieId)")
+    // Return true for testing (movie is now favorited)
+    return true
+  }
+
+  func isFavorite(_ movieId: Int) async throws -> Bool {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 50_000_000)  // 0.05 seconds
+    // Return true for first two movies, false for others
+    return movieId <= 2
+  }
 }
