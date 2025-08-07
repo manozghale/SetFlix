@@ -214,9 +214,15 @@ class MovieSearchViewController: UIViewController {
 
   private func showCacheIndicator() {
     if !viewModel.isNetworkAvailable() {
-      // Show offline indicator
+      // Show offline indicator with specific message
       let offlineLabel = UILabel()
-      offlineLabel.text = "📱 Offline Mode - Showing cached results"
+
+      if viewModel.isShowingCachedSearchResults {
+        offlineLabel.text = "📱 Offline Mode - Showing cached search results"
+      } else {
+        offlineLabel.text = "📱 Offline Mode - Showing cached popular movies"
+      }
+
       offlineLabel.textAlignment = .center
       offlineLabel.backgroundColor = .systemYellow.withAlphaComponent(0.8)
       offlineLabel.textColor = .black

@@ -38,6 +38,8 @@ class CacheManager {
       for movie in response.results {
         let movieEntity = self.createMovieEntity(from: movie, in: backgroundContext)
         pageEntity.addToMovies(movieEntity)
+        // Ensure the inverse relationship is also set
+        movieEntity.addToPages(pageEntity)
       }
 
       // Save context
