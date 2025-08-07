@@ -95,8 +95,6 @@ class MovieTableViewCell: UITableViewCell {
 
     // Load poster image
     if let posterPath = movie.posterPath {
-      // For now, we'll use a placeholder image
-      // In the next phase, this will be replaced with actual image loading
       loadPosterImage(from: posterPath)
     } else {
       posterImageView.image = UIImage(systemName: "film")
@@ -124,13 +122,14 @@ class MovieTableViewCell: UITableViewCell {
   }
 
   private func loadPosterImage(from path: String) {
-    // For Phase 2, we'll use placeholder images
-    // In Phase 3, this will be replaced with actual ImageLoader integration
-
-    // Create a placeholder image with movie title
-    let placeholderImage = createPlaceholderImage(for: path)
-    posterImageView.image = placeholderImage
+    // Set placeholder first
+    posterImageView.image = createPlaceholderImage(for: path)
     posterImageView.contentMode = .scaleAspectFill
+
+    // Load real image using ImageLoader
+    posterImageView.loadImageAsync(from: path, size: "w92") { [weak self] in
+      // Image loaded successfully, placeholder will be replaced
+    }
   }
 
   private func createPlaceholderImage(for path: String) -> UIImage {

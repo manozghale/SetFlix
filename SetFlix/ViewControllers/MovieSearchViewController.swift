@@ -22,6 +22,7 @@ class MovieSearchViewController: UIViewController {
   private var currentPage = 1
   private var hasMorePages = true
   private var isLoading = false
+  private var searchTask: Task<Void, Never>?
 
   // MARK: - Dependencies
   private let repository: MovieRepository
@@ -132,9 +133,30 @@ class MovieSearchViewController: UIViewController {
 
   // MARK: - Data Loading
   private func loadInitialData() {
-    // For now, we'll load some sample data
-    // In the next phase, this will be replaced with actual API calls
-    loadSampleData()
+    // Load cached data first, then try to refresh from API
+    loadCachedData()
+    refreshFromAPI()
+  }
+
+  private func loadCachedData() {
+    Task {
+      do {
+        // For now, we'll load some sample data
+        // In the next phase, this will be replaced with actual cached data
+        await MainActor.run {
+          loadSampleData()
+        }
+      } catch {
+        await MainActor.run {
+          showError("Failed to load cached data: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+
+  private func refreshFromAPI() {
+    // This will be implemented when we add real API integration
+    // For now, we'll keep the sample data
   }
 
   private func loadSampleData() {
@@ -168,6 +190,9 @@ class MovieSearchViewController: UIViewController {
   }
 
   private func searchMovies(query: String) {
+    // Cancel previous search task
+    searchTask?.cancel()
+
     guard !query.isEmpty else {
       filteredMovies = movies
       tableView.reloadData()
@@ -175,13 +200,71 @@ class MovieSearchViewController: UIViewController {
       return
     }
 
-    // Filter movies based on search query
-    filteredMovies = movies.filter { movie in
-      movie.title.localizedCaseInsensitiveContains(query)
-    }
+    // Create new search task with debouncing
+    searchTask = Task {
+      do {
+        // Add a small delay for debouncing
+        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
 
-    tableView.reloadData()
-    updateEmptyState()
+        // Check if task was cancelled
+        try Task.checkCancellation()
+
+        // Perform search
+        let searchResponse = try await repository.searchMovies(query: query, page: 1)
+
+        // Check if task was cancelled before updating UI
+        try Task.checkCancellation()
+
+        await MainActor.run {
+          self.filteredMovies = searchResponse.results
+          self.hasMorePages = searchResponse.page < searchResponse.totalPages
+          self.currentPage = searchResponse.page
+          self.tableView.reloadData()
+          self.updateEmptyState()
+        }
+      } catch is CancellationError {
+        // Search was cancelled, do nothing
+        return
+      } catch {
+        await MainActor.run {
+          self.showError("Search failed: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+
+  private func loadMoreResults() {
+    guard !isLoading && hasMorePages else { return }
+
+    isLoading = true
+
+    Task {
+      do {
+        guard let searchText = searchController.searchBar.text, !searchText.isEmpty else {
+          await MainActor.run {
+            self.isLoading = false
+          }
+          return
+        }
+
+        let nextPage = currentPage + 1
+        let searchResponse = try await repository.searchMovies(query: searchText, page: nextPage)
+
+        await MainActor.run {
+          self.movies.append(contentsOf: searchResponse.results)
+          self.filteredMovies = self.movies
+          self.hasMorePages = searchResponse.page < searchResponse.totalPages
+          self.currentPage = searchResponse.page
+          self.isLoading = false
+          self.tableView.reloadData()
+        }
+      } catch {
+        await MainActor.run {
+          self.isLoading = false
+          self.showError("Failed to load more results: \(error.localizedDescription)")
+        }
+      }
+    }
   }
 
   private func updateEmptyState() {
@@ -204,6 +287,12 @@ class MovieSearchViewController: UIViewController {
         )
       }
     }
+  }
+
+  private func showError(_ message: String) {
+    let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "OK", style: .default))
+    present(alert, animated: true)
   }
 
   // MARK: - Actions
@@ -241,7 +330,7 @@ extension MovieSearchViewController: UITableViewDelegate {
     tableView.deselectRow(at: indexPath, animated: true)
 
     let movie = filteredMovies[indexPath.row]
-    let detailViewController = MovieDetailViewController(movie: movie)
+    let detailViewController = MovieDetailViewController(movie: movie, repository: repository)
     navigationController?.pushViewController(detailViewController, animated: true)
   }
 }
@@ -249,8 +338,14 @@ extension MovieSearchViewController: UITableViewDelegate {
 // MARK: - UITableViewDataSourcePrefetching
 extension MovieSearchViewController: UITableViewDataSourcePrefetching {
   func tableView(_ tableView: UITableView, prefetchRowsAt indexPaths: [IndexPath]) {
-    // TODO: Implement pagination prefetching
-    // This will be implemented when we add real API integration
+    let thresholdIndex = filteredMovies.count - 5
+
+    for indexPath in indexPaths {
+      if indexPath.row >= thresholdIndex {
+        loadMoreResults()
+        break
+      }
+    }
   }
 }
 

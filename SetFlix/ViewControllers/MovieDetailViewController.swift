@@ -20,10 +20,13 @@ class MovieDetailViewController: UIViewController {
 
   // MARK: - Properties
   private let movie: Movie
+  private let repository: MovieRepository
+  private var isFavorite = false
 
   // MARK: - Initialization
-  init(movie: Movie) {
+  init(movie: Movie, repository: MovieRepository) {
     self.movie = movie
+    self.repository = repository
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -37,6 +40,7 @@ class MovieDetailViewController: UIViewController {
     setupUI()
     setupConstraints()
     configureWithMovie()
+    checkFavoriteStatus()
   }
 
   // MARK: - UI Setup
@@ -159,9 +163,22 @@ class MovieDetailViewController: UIViewController {
       posterImageView.tintColor = .systemGray3
       posterImageView.contentMode = .scaleAspectFit
     }
+  }
 
-    // TODO: Check if movie is in favorites and update button state
-    // This will be implemented in the next phase
+  private func checkFavoriteStatus() {
+    Task {
+      do {
+        let favorite = try await repository.isFavorite(movie.id)
+        await MainActor.run {
+          self.isFavorite = favorite
+          self.favoriteButton.isSelected = favorite
+        }
+      } catch {
+        await MainActor.run {
+          self.showError("Failed to check favorite status: \(error.localizedDescription)")
+        }
+      }
+    }
   }
 
   private func extractYear(from dateString: String) -> String {
@@ -183,12 +200,12 @@ class MovieDetailViewController: UIViewController {
   }
 
   private func loadPosterImage(from path: String) {
-    // For Phase 2, we'll use placeholder images
-    // In Phase 3, this will be replaced with actual ImageLoader integration
-
-    let placeholderImage = createPlaceholderImage(for: path)
-    posterImageView.image = placeholderImage
-    posterImageView.contentMode = .scaleAspectFill
+    // Use ImageLoader for real image loading
+    posterImageView.loadImageAsync(from: path, size: "w500") { [weak self] in
+      // Set placeholder while loading
+      self?.posterImageView.image = self?.createPlaceholderImage(for: path)
+      self?.posterImageView.contentMode = .scaleAspectFill
+    }
   }
 
   private func createPlaceholderImage(for path: String) -> UIImage {
@@ -237,14 +254,36 @@ class MovieDetailViewController: UIViewController {
     }
   }
 
+  private func showError(_ message: String) {
+    let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "OK", style: .default))
+    present(alert, animated: true)
+  }
+
   // MARK: - Actions
   @objc private func favoriteButtonTapped() {
-    favoriteButton.isSelected.toggle()
+    Task {
+      do {
+        let newFavoriteStatus = try await repository.toggleFavorite(movie.id)
+        await MainActor.run {
+          self.isFavorite = newFavoriteStatus
+          self.favoriteButton.isSelected = newFavoriteStatus
 
-    // TODO: Implement favorite functionality
-    // This will be implemented in the next phase with repository integration
+          // Show feedback
+          let message = newFavoriteStatus ? "Added to favorites" : "Removed from favorites"
+          self.showSuccessMessage(message)
+        }
+      } catch {
+        await MainActor.run {
+          self.showError("Failed to update favorite status: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
 
-    let isFavorite = favoriteButton.isSelected
-    print("Movie \(movie.title) favorite status: \(isFavorite)")
+  private func showSuccessMessage(_ message: String) {
+    let alert = UIAlertController(title: "Success", message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "OK", style: .default))
+    present(alert, animated: true)
   }
 }
