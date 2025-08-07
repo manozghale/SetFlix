@@ -82,7 +82,12 @@ class MovieDetailViewModel: ObservableObject {
 
     } catch {
       isLoading = false
-      errorMessage = "Failed to load movie details: \(error.localizedDescription)"
+
+      if error is NetworkError {
+        errorMessage = "Failed to load movie details: \(error.localizedDescription)"
+      } else {
+        errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
+      }
     }
   }
 

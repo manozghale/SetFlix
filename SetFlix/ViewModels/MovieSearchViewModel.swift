@@ -47,12 +47,12 @@ class MovieSearchViewModel: ObservableObject {
   /// Load initial popular movies
   func loadInitialData() {
     Task {
-      // First try to load from cache
-      await loadCachedData()
-
-      // Then try to refresh from API if network is available
+      // Always try to load from API first when online
       if repository.isNetworkAvailable() {
         await loadPopularMovies()
+      } else {
+        // Only load from cache when offline
+        await loadCachedData()
       }
     }
   }
@@ -62,7 +62,7 @@ class MovieSearchViewModel: ObservableObject {
     if !cachedResponse.results.isEmpty {
       movies = cachedResponse.results
       filteredMovies = cachedResponse.results
-      print("📱 Loaded \(cachedResponse.results.count) movies from cache")
+      print("📱 Loaded \(cachedResponse.results.count) movies from cache (offline mode)")
     }
   }
 
@@ -176,20 +176,18 @@ class MovieSearchViewModel: ObservableObject {
       currentPage = response.page
       hasMorePages = (response.totalPages ?? 1) > response.page
       isLoading = false
-      errorMessage = nil  // Ensure error is cleared on success
+      errorMessage = nil
 
     } catch {
       // Only set error if the task hasn't been cancelled
       if !Task.isCancelled {
         isLoading = false
 
-        // Try to load cached results for this query
-        let cachedResponse = repository.getCachedMovies(for: query)
-        if !cachedResponse.results.isEmpty {
-          filteredMovies = cachedResponse.results
-          print("📱 Loaded cached results for '\(query)' due to network error")
-        } else {
+        // Show error message for network issues
+        if error is NetworkError {
           errorMessage = "Search failed: \(error.localizedDescription)"
+        } else {
+          errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
         }
       }
     }

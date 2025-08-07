@@ -38,77 +38,89 @@ class MovieRepositoryImpl: MovieRepository {
     self.networkReachability = networkReachability
   }
 
-  // MARK: - Search Movies (with caching)
+  // MARK: - Search Movies (Online-first with offline fallback)
   func searchMovies(query: String, page: Int) async throws -> MovieSearchResponse {
     print("🔍 Searching movies for query: '\(query)' page: \(page)")
 
-    // Try to get cached results first
-    if let cachedResponse = cacheManager.getCachedSearchResults(for: query, page: page) {
-      print("📱 Returning cached search results for '\(query)'")
-      return cachedResponse
-    }
-
-    // If no cache or network available, try API
+    // When online: Try API first, then cache the results
     if isNetworkAvailable() {
       do {
         let response = try await apiService.searchMovies(query: query, page: page)
 
-        // Cache the results
+        // Cache the fresh results
         cacheManager.saveSearchResults(response, for: query)
-        print("💾 Cached search results for '\(query)'")
+        print("💾 Cached fresh search results for '\(query)'")
 
         return response
       } catch {
         print("❌ API search failed: \(error)")
+
+        // If API fails, try to get cached data as fallback
+        if let cachedResponse = cacheManager.getCachedSearchResults(for: query, page: page) {
+          print("📱 API failed, returning cached search results for '\(query)'")
+          return cachedResponse
+        }
+
+        // No cache available, throw the original error
         throw error
       }
     } else {
-      // No network and no cache
-      throw NetworkError.noInternetConnection
+      // When offline: Use cached data only
+      print("📱 Offline mode - checking cache for '\(query)'")
+      if let cachedResponse = cacheManager.getCachedSearchResults(for: query, page: page) {
+        print("📱 Returning cached search results for '\(query)'")
+        return cachedResponse
+      } else {
+        // No cache available offline
+        throw NetworkError.noInternetConnection
+      }
     }
   }
 
-  // MARK: - Get Movie Details (with caching)
+  // MARK: - Get Movie Details (Online-first with offline fallback)
   func getMovieDetails(id: Int) async throws -> MovieDetail {
     print("🔍 Getting movie details for ID: \(id)")
 
-    // Try to get cached details first
-    if let cachedDetail = cacheManager.getCachedMovieDetails(id: id) {
-      print("📱 Returning cached movie details for ID: \(id)")
-      return cachedDetail
-    }
-
-    // If no cache or network available, try API
+    // When online: Try API first, then cache the results
     if isNetworkAvailable() {
       do {
         let detail = try await apiService.getMovieDetails(id: id)
 
-        // Cache the details
+        // Cache the fresh details
         cacheManager.saveMovieDetails(detail)
-        print("💾 Cached movie details for ID: \(id)")
+        print("💾 Cached fresh movie details for ID: \(id)")
 
         return detail
       } catch {
         print("❌ API movie details failed: \(error)")
+
+        // If API fails, try to get cached data as fallback
+        if let cachedDetail = cacheManager.getCachedMovieDetails(id: id) {
+          print("📱 API failed, returning cached movie details for ID: \(id)")
+          return cachedDetail
+        }
+
+        // No cache available, throw the original error
         throw error
       }
     } else {
-      // No network and no cache
-      throw NetworkError.noInternetConnection
+      // When offline: Use cached data only
+      print("📱 Offline mode - checking cache for movie ID: \(id)")
+      if let cachedDetail = cacheManager.getCachedMovieDetails(id: id) {
+        print("📱 Returning cached movie details for ID: \(id)")
+        return cachedDetail
+      } else {
+        // No cache available offline
+        throw NetworkError.noInternetConnection
+      }
     }
   }
 
-  // MARK: - Get Popular Movies (with caching)
+  // MARK: - Get Popular Movies (Online-first with offline fallback)
   func getPopularMovies(page: Int) async throws -> MovieSearchResponse {
     print("🔍 Getting popular movies page: \(page)")
 
-    // For page 1, try cache first
-    if page == 1, let cachedResponse = cacheManager.getCachedPopularMovies() {
-      print("📱 Returning cached popular movies")
-      return cachedResponse
-    }
-
-    // If no cache or network available, try API
+    // When online: Try API first, then cache the results
     if isNetworkAvailable() {
       do {
         let response = try await apiService.getPopularMovies(page: page)
@@ -116,31 +128,59 @@ class MovieRepositoryImpl: MovieRepository {
         // Cache only page 1
         if page == 1 {
           cacheManager.savePopularMovies(response)
-          print("💾 Cached popular movies")
+          print("💾 Cached fresh popular movies")
         }
 
         return response
       } catch {
         print("❌ API popular movies failed: \(error)")
+
+        // If API fails, try to get cached data as fallback (only for page 1)
+        if page == 1, let cachedResponse = cacheManager.getCachedPopularMovies() {
+          print("📱 API failed, returning cached popular movies")
+          return cachedResponse
+        }
+
+        // No cache available, throw the original error
         throw error
       }
     } else {
-      // No network and no cache
+      // When offline: Use cached data only (only for page 1)
+      if page == 1 {
+        print("📱 Offline mode - checking cache for popular movies")
+        if let cachedResponse = cacheManager.getCachedPopularMovies() {
+          print("📱 Returning cached popular movies")
+          return cachedResponse
+        }
+      }
+
+      // No cache available offline
       throw NetworkError.noInternetConnection
     }
   }
 
-  // MARK: - Other API Methods
+  // MARK: - Other API Methods (Online-only)
   func getTrendingMovies(page: Int) async throws -> MovieSearchResponse {
     print("🔍 Getting trending movies page: \(page)")
-    return try await apiService.getTrendingMovies(page: page)
+
+    if isNetworkAvailable() {
+      return try await apiService.getTrendingMovies(page: page)
+    } else {
+      throw NetworkError.noInternetConnection
+    }
   }
 
   func getMovieChanges(startDate: String, endDate: String, page: Int) async throws
     -> MovieChangesResponse
   {
     print("🔍 Getting movie changes page: \(page)")
-    return try await apiService.getMovieChanges(startDate: startDate, endDate: endDate, page: page)
+
+    if isNetworkAvailable() {
+      return try await apiService.getMovieChanges(
+        startDate: startDate, endDate: endDate, page: page)
+    } else {
+      throw NetworkError.noInternetConnection
+    }
   }
 
   // MARK: - Caching Methods
