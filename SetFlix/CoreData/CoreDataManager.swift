@@ -29,6 +29,16 @@ class CoreDataManager {
     return persistentContainer.viewContext
   }
 
+  // Background context for write operations
+  private var backgroundContext: NSManagedObjectContext {
+    return persistentContainer.newBackgroundContext()
+  }
+
+  // Public method to get background context for external use
+  func getBackgroundContext() -> NSManagedObjectContext {
+    return persistentContainer.newBackgroundContext()
+  }
+
   // MARK: - Save Context
 
   func saveContext() {
@@ -37,7 +47,20 @@ class CoreDataManager {
         try context.save()
       } catch {
         let error = error as NSError
-        fatalError("Unresolved error \(error), \(error.userInfo)")
+        print("Error saving context: \(error), \(error.userInfo)")
+      }
+    }
+  }
+
+  func saveBackgroundContext(_ context: NSManagedObjectContext) {
+    context.performAndWait {
+      if context.hasChanges {
+        do {
+          try context.save()
+        } catch {
+          let error = error as NSError
+          print("Error saving background context: \(error), \(error.userInfo)")
+        }
       }
     }
   }
@@ -45,93 +68,214 @@ class CoreDataManager {
   // MARK: - Movie Operations
 
   func saveMovie(_ movie: Movie, isFavorite: Bool = false) {
-    let movieEntity = MovieEntity(context: context)
-    movieEntity.id = Int64(movie.id)
-    movieEntity.title = movie.title
+    let backgroundContext = self.backgroundContext
 
-    movieEntity.posterURL = movie.posterURL
-    movieEntity.isFavorite = isFavorite
+    backgroundContext.performAndWait {
+      // Check if movie already exists
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "id == %d", movie.id)
+      request.fetchLimit = 1
 
-    // Convert string date to Date
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = "yyyy-MM-dd"
-    movieEntity.releaseDate = dateFormatter.date(from: movie.releaseDate)
+      let existingMovie: MovieEntity?
+      do {
+        existingMovie = try backgroundContext.fetch(request).first
+      } catch {
+        print("Error checking existing movie: \(error)")
+        existingMovie = nil
+      }
 
-    saveContext()
+      let movieEntity: MovieEntity
+      if let existing = existingMovie {
+        movieEntity = existing
+      } else {
+        movieEntity = MovieEntity(context: backgroundContext)
+        movieEntity.id = Int64(movie.id)
+      }
+
+      movieEntity.title = movie.title
+      movieEntity.posterURL = movie.posterURL
+      movieEntity.isFavorite = isFavorite
+
+      // Convert string date to Date (handle optional release date)
+      if let releaseDateString = movie.releaseDate {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        movieEntity.releaseDate = dateFormatter.date(from: releaseDateString)
+      } else {
+        movieEntity.releaseDate = nil
+      }
+
+      saveBackgroundContext(backgroundContext)
+    }
   }
 
   func getMovie(by id: Int) -> MovieEntity? {
-    let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
-    request.predicate = NSPredicate(format: "id == %d", id)
-    request.fetchLimit = 1
+    var result: MovieEntity?
 
-    do {
-      return try context.fetch(request).first
-    } catch {
-      print("Error fetching movie: \(error)")
-      return nil
+    context.performAndWait {
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "id == %d", id)
+      request.fetchLimit = 1
+
+      do {
+        result = try context.fetch(request).first
+      } catch {
+        print("Error fetching movie: \(error)")
+        result = nil
+      }
     }
+
+    return result
   }
 
   func getAllMovies() -> [MovieEntity] {
-    let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+    var result: [MovieEntity] = []
 
-    do {
-      return try context.fetch(request)
-    } catch {
-      print("Error fetching all movies: \(error)")
-      return []
+    context.performAndWait {
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+
+      do {
+        result = try context.fetch(request)
+      } catch {
+        print("Error fetching all movies: \(error)")
+        result = []
+      }
     }
+
+    return result
   }
 
   func getFavoriteMovies() -> [MovieEntity] {
-    let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
-    request.predicate = NSPredicate(format: "isFavorite == YES")
+    var result: [MovieEntity] = []
 
-    do {
-      return try context.fetch(request)
-    } catch {
-      print("Error fetching favorite movies: \(error)")
-      return []
+    context.performAndWait {
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "isFavorite == YES")
+
+      do {
+        result = try context.fetch(request)
+      } catch {
+        print("Error fetching favorite movies: \(error)")
+        result = []
+      }
     }
+
+    return result
   }
 
   func toggleFavorite(for movieId: Int) -> Bool {
-    guard let movieEntity = getMovie(by: movieId) else { return false }
+    let backgroundContext = self.backgroundContext
+    var result = false
 
-    movieEntity.isFavorite.toggle()
-    saveContext()
+    backgroundContext.performAndWait {
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "id == %d", movieId)
+      request.fetchLimit = 1
 
-    return movieEntity.isFavorite
+      do {
+        if let movieEntity = try backgroundContext.fetch(request).first {
+          movieEntity.isFavorite.toggle()
+          result = movieEntity.isFavorite
+          saveBackgroundContext(backgroundContext)
+        }
+      } catch {
+        print("Error toggling favorite: \(error)")
+      }
+    }
+
+    return result
   }
 
   func deleteMovie(with id: Int) {
-    guard let movieEntity = getMovie(by: id) else { return }
+    let backgroundContext = self.backgroundContext
 
-    context.delete(movieEntity)
-    saveContext()
+    backgroundContext.performAndWait {
+      let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "id == %d", id)
+      request.fetchLimit = 1
+
+      do {
+        if let movieEntity = try backgroundContext.fetch(request).first {
+          backgroundContext.delete(movieEntity)
+          saveBackgroundContext(backgroundContext)
+        }
+      } catch {
+        print("Error deleting movie: \(error)")
+      }
+    }
   }
 
   // MARK: - Page Operations
 
   func savePage(query: String, pageNumber: Int, movies: [Movie]) {
-    // First, save all movies
-    for movie in movies {
-      saveMovie(movie)
+    let backgroundContext = self.backgroundContext
+
+    backgroundContext.performAndWait {
+      // First, save all movies
+      for movie in movies {
+        // Check if movie already exists
+        let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %d", movie.id)
+        request.fetchLimit = 1
+
+        let existingMovie: MovieEntity?
+        do {
+          existingMovie = try backgroundContext.fetch(request).first
+        } catch {
+          print("Error checking existing movie: \(error)")
+          existingMovie = nil
+        }
+
+        let movieEntity: MovieEntity
+        if let existing = existingMovie {
+          movieEntity = existing
+        } else {
+          movieEntity = MovieEntity(context: backgroundContext)
+          movieEntity.id = Int64(movie.id)
+        }
+
+        movieEntity.title = movie.title
+        movieEntity.posterURL = movie.posterURL
+        movieEntity.isFavorite = false
+
+        // Convert string date to Date (handle optional release date)
+        if let releaseDateString = movie.releaseDate {
+          let dateFormatter = DateFormatter()
+          dateFormatter.dateFormat = "yyyy-MM-dd"
+          movieEntity.releaseDate = dateFormatter.date(from: releaseDateString)
+        } else {
+          movieEntity.releaseDate = nil
+        }
+      }
+
+      // Create or update page entity
+      let pageEntity = getOrCreatePageEntity(
+        query: query, pageNumber: pageNumber, context: backgroundContext)
+      pageEntity.timestamp = Date()
+
+      // Get movie entities and add to page
+      let movieEntities = movies.compactMap { movie -> MovieEntity? in
+        let request: NSFetchRequest<MovieEntity> = MovieEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %d", movie.id)
+        request.fetchLimit = 1
+
+        do {
+          return try backgroundContext.fetch(request).first
+        } catch {
+          print("Error fetching movie for page: \(error)")
+          return nil
+        }
+      }
+
+      pageEntity.movies = NSSet(array: movieEntities)
+
+      saveBackgroundContext(backgroundContext)
     }
-
-    // Create or update page entity
-    let pageEntity = getOrCreatePageEntity(query: query, pageNumber: pageNumber)
-    pageEntity.timestamp = Date()
-
-    // Get movie entities and add to page
-    let movieEntities = movies.compactMap { getMovie(by: $0.id) }
-    pageEntity.movies = NSSet(array: movieEntities)
-
-    saveContext()
   }
 
-  func getOrCreatePageEntity(query: String, pageNumber: Int) -> PageEntity {
+  func getOrCreatePageEntity(query: String, pageNumber: Int, context: NSManagedObjectContext)
+    -> PageEntity
+  {
     let request: NSFetchRequest<PageEntity> = PageEntity.fetchRequest()
     request.predicate = NSPredicate(format: "query == %@ AND pageNumber == %d", query, pageNumber)
     request.fetchLimit = 1
@@ -154,58 +298,76 @@ class CoreDataManager {
   }
 
   func getCachedMovies(for query: String, pageNumber: Int) -> [MovieEntity]? {
-    let request: NSFetchRequest<PageEntity> = PageEntity.fetchRequest()
-    request.predicate = NSPredicate(format: "query == %@ AND pageNumber == %d", query, pageNumber)
-    request.fetchLimit = 1
+    var result: [MovieEntity]?
 
-    do {
-      guard let pageEntity = try context.fetch(request).first else { return nil }
+    context.performAndWait {
+      let request: NSFetchRequest<PageEntity> = PageEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "query == %@ AND pageNumber == %d", query, pageNumber)
+      request.fetchLimit = 1
 
-      // Check if cache is still valid (1 hour)
-      let cacheExpiration: TimeInterval = 3600  // 1 hour
-      if let timestamp = pageEntity.timestamp,
-        Date().timeIntervalSince(timestamp) > cacheExpiration
-      {
-        // Cache expired, delete it
-        context.delete(pageEntity)
-        saveContext()
-        return nil
+      do {
+        guard let pageEntity = try context.fetch(request).first else {
+          result = nil
+          return
+        }
+
+        // Check if cache is still valid (1 hour)
+        let cacheExpiration: TimeInterval = 3600  // 1 hour
+        if let timestamp = pageEntity.timestamp,
+          Date().timeIntervalSince(timestamp) > cacheExpiration
+        {
+          // Cache expired, delete it
+          context.delete(pageEntity)
+          saveContext()
+          result = nil
+          return
+        }
+
+        result = pageEntity.movies?.allObjects as? [MovieEntity] ?? []
+      } catch {
+        print("Error fetching cached movies: \(error)")
+        result = nil
       }
-
-      return pageEntity.movies?.allObjects as? [MovieEntity] ?? []
-    } catch {
-      print("Error fetching cached movies: \(error)")
-      return nil
     }
+
+    return result
   }
 
   func clearCache() {
-    let pageRequest: NSFetchRequest<NSFetchRequestResult> = PageEntity.fetchRequest()
-    let deletePageRequest = NSBatchDeleteRequest(fetchRequest: pageRequest)
+    let backgroundContext = self.backgroundContext
 
-    do {
-      try context.execute(deletePageRequest)
-      saveContext()
-    } catch {
-      print("Error clearing cache: \(error)")
+    backgroundContext.performAndWait {
+      let pageRequest: NSFetchRequest<NSFetchRequestResult> = PageEntity.fetchRequest()
+      let deletePageRequest = NSBatchDeleteRequest(fetchRequest: pageRequest)
+
+      do {
+        try backgroundContext.execute(deletePageRequest)
+        saveBackgroundContext(backgroundContext)
+      } catch {
+        print("Error clearing cache: \(error)")
+      }
     }
   }
 
   func clearExpiredCache() {
-    let request: NSFetchRequest<PageEntity> = PageEntity.fetchRequest()
-    let cacheExpiration: TimeInterval = 3600  // 1 hour
-    let expirationDate = Date().addingTimeInterval(-cacheExpiration)
+    let backgroundContext = self.backgroundContext
 
-    request.predicate = NSPredicate(format: "timestamp < %@", expirationDate as NSDate)
+    backgroundContext.performAndWait {
+      let request: NSFetchRequest<PageEntity> = PageEntity.fetchRequest()
+      let cacheExpiration: TimeInterval = 3600  // 1 hour
+      let expirationDate = Date().addingTimeInterval(-cacheExpiration)
 
-    do {
-      let expiredPages = try context.fetch(request)
-      for page in expiredPages {
-        context.delete(page)
+      request.predicate = NSPredicate(format: "timestamp < %@", expirationDate as NSDate)
+
+      do {
+        let expiredPages = try backgroundContext.fetch(request)
+        for page in expiredPages {
+          backgroundContext.delete(page)
+        }
+        saveBackgroundContext(backgroundContext)
+      } catch {
+        print("Error clearing expired cache: \(error)")
       }
-      saveContext()
-    } catch {
-      print("Error clearing expired cache: \(error)")
     }
   }
 }
@@ -214,13 +376,16 @@ class CoreDataManager {
 
 extension MovieEntity {
   func toMovie() -> Movie? {
-    guard let title = title,
-      let releaseDate = releaseDate
-    else { return nil }
+    guard let title = title else { return nil }
 
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = "yyyy-MM-dd"
-    let releaseDateString = dateFormatter.string(from: releaseDate)
+    let releaseDateString: String?
+    if let releaseDate = releaseDate {
+      let dateFormatter = DateFormatter()
+      dateFormatter.dateFormat = "yyyy-MM-dd"
+      releaseDateString = dateFormatter.string(from: releaseDate)
+    } else {
+      releaseDateString = nil
+    }
 
     return Movie(
       id: Int(id),

@@ -5,6 +5,7 @@
 //  Created by Manoj on 06/08/2025.
 //
 
+import Combine
 import UIKit
 
 class MovieSearchViewController: UIViewController {
@@ -14,22 +15,15 @@ class MovieSearchViewController: UIViewController {
   private let tableView = UITableView()
   private let loadingIndicator = UIActivityIndicatorView(style: .large)
   private let emptyStateView = EmptyStateView()
+  private let refreshControl = UIRefreshControl()
 
-  // MARK: - Properties
-  private var movies: [Movie] = []
-  private var filteredMovies: [Movie] = []
-  private var isSearching = false
-  private var currentPage = 1
-  private var hasMorePages = true
-  private var isLoading = false
-  private var searchTask: Task<Void, Never>?
-
-  // MARK: - Dependencies
-  private let repository: MovieRepository
+  // MARK: - ViewModel
+  private let viewModel: MovieSearchViewModel
+  private var cancellables = Set<AnyCancellable>()
 
   // MARK: - Initialization
-  init(repository: MovieRepository = MovieRepositoryFactory.createRepository()) {
-    self.repository = repository
+  init(viewModel: MovieSearchViewModel) {
+    self.viewModel = viewModel
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -44,7 +38,8 @@ class MovieSearchViewController: UIViewController {
     setupConstraints()
     setupSearchController()
     setupTableView()
-    loadInitialData()
+    setupBindings()
+    viewModel.loadInitialData()
   }
 
   // MARK: - UI Setup
@@ -129,151 +124,73 @@ class MovieSearchViewController: UIViewController {
 
     // Remove empty cells
     tableView.tableFooterView = UIView()
+
+    // Add refresh control
+    refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+    tableView.refreshControl = refreshControl
   }
 
-  // MARK: - Data Loading
-  private func loadInitialData() {
-    // Load cached data first, then try to refresh from API
-    loadCachedData()
-    refreshFromAPI()
-  }
+  // MARK: - Setup
+  private func setupBindings() {
+    // Bind movies to table view
+    viewModel.$filteredMovies
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in
+        self?.tableView.reloadData()
+        self?.updateEmptyState()
+      }
+      .store(in: &cancellables)
 
-  private func loadCachedData() {
-    Task {
-      do {
-        // For now, we'll load some sample data
-        // In the next phase, this will be replaced with actual cached data
-        await MainActor.run {
-          loadSampleData()
-        }
-      } catch {
-        await MainActor.run {
-          showError("Failed to load cached data: \(error.localizedDescription)")
+    // Bind loading state
+    viewModel.$isLoading
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] isLoading in
+        self?.loadingIndicator.isHidden = !isLoading
+        if isLoading {
+          self?.loadingIndicator.startAnimating()
+        } else {
+          self?.loadingIndicator.stopAnimating()
         }
       }
-    }
-  }
+      .store(in: &cancellables)
 
-  private func refreshFromAPI() {
-    // This will be implemented when we add real API integration
-    // For now, we'll keep the sample data
-  }
+    // Bind error messages
+    viewModel.$errorMessage
+      .compactMap { $0 }
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] errorMessage in
+        self?.showError(errorMessage)
+        self?.viewModel.clearError()
+      }
+      .store(in: &cancellables)
 
-  private func loadSampleData() {
-    movies = [
-      Movie(
-        id: 1, title: "The Enigma Code", releaseDate: "2022-01-15",
-        posterPath: "/sample1.jpg"),
-      Movie(
-        id: 2, title: "Starlight Symphony", releaseDate: "2023-03-22",
-        posterPath: "/sample2.jpg"),
-      Movie(
-        id: 3, title: "Echoes of the Past", releaseDate: "2021-11-08",
-        posterPath: "/sample3.jpg"),
-      Movie(
-        id: 4, title: "Crimson Horizon", releaseDate: "2022-07-14",
-        posterPath: "/sample4.jpg"),
-      Movie(
-        id: 5, title: "Whispers of the Wind", releaseDate: "2023-05-30",
-        posterPath: "/sample5.jpg"),
-      Movie(
-        id: 6, title: "The Silent Observer", releaseDate: "2021-09-12",
-        posterPath: "/sample6.jpg"),
-      Movie(
-        id: 7, title: "Beneath the Surface", releaseDate: "2022-12-03",
-        posterPath: "/sample7.jpg"),
-    ]
+    // Bind empty state
+    viewModel.$isEmptyState
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] isEmpty in
+        self?.updateEmptyState()
+      }
+      .store(in: &cancellables)
 
-    filteredMovies = movies
-    tableView.reloadData()
-    updateEmptyState()
-  }
-
-  private func searchMovies(query: String) {
-    // Cancel previous search task
-    searchTask?.cancel()
-
-    guard !query.isEmpty else {
-      filteredMovies = movies
-      tableView.reloadData()
-      updateEmptyState()
-      return
-    }
-
-    // Create new search task with debouncing
-    searchTask = Task {
-      do {
-        // Add a small delay for debouncing
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
-
-        // Check if task was cancelled
-        try Task.checkCancellation()
-
-        // Perform search
-        let searchResponse = try await repository.searchMovies(query: query, page: 1)
-
-        // Check if task was cancelled before updating UI
-        try Task.checkCancellation()
-
-        await MainActor.run {
-          self.filteredMovies = searchResponse.results
-          self.hasMorePages = searchResponse.page < searchResponse.totalPages
-          self.currentPage = searchResponse.page
-          self.tableView.reloadData()
-          self.updateEmptyState()
-        }
-      } catch is CancellationError {
-        // Search was cancelled, do nothing
-        return
-      } catch {
-        await MainActor.run {
-          self.showError("Search failed: \(error.localizedDescription)")
+    // Add cache status indicator
+    viewModel.$isLoading
+      .combineLatest(viewModel.$filteredMovies)
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] isLoading, movies in
+        if !isLoading && !movies.isEmpty {
+          self?.showCacheIndicator()
         }
       }
-    }
-  }
-
-  private func loadMoreResults() {
-    guard !isLoading && hasMorePages else { return }
-
-    isLoading = true
-
-    Task {
-      do {
-        guard let searchText = searchController.searchBar.text, !searchText.isEmpty else {
-          await MainActor.run {
-            self.isLoading = false
-          }
-          return
-        }
-
-        let nextPage = currentPage + 1
-        let searchResponse = try await repository.searchMovies(query: searchText, page: nextPage)
-
-        await MainActor.run {
-          self.movies.append(contentsOf: searchResponse.results)
-          self.filteredMovies = self.movies
-          self.hasMorePages = searchResponse.page < searchResponse.totalPages
-          self.currentPage = searchResponse.page
-          self.isLoading = false
-          self.tableView.reloadData()
-        }
-      } catch {
-        await MainActor.run {
-          self.isLoading = false
-          self.showError("Failed to load more results: \(error.localizedDescription)")
-        }
-      }
-    }
+      .store(in: &cancellables)
   }
 
   private func updateEmptyState() {
-    let isEmpty = filteredMovies.isEmpty
+    let isEmpty = viewModel.isEmptyState
     emptyStateView.isHidden = !isEmpty
     tableView.isHidden = isEmpty
 
     if isEmpty {
-      if isSearching {
+      if viewModel.isSearching {
         emptyStateView.configure(
           title: "No Results Found",
           message: "Try searching for a different movie title",
@@ -295,31 +212,49 @@ class MovieSearchViewController: UIViewController {
     present(alert, animated: true)
   }
 
+  private func showCacheIndicator() {
+    if !viewModel.isNetworkAvailable() {
+      // Show offline indicator
+      let offlineLabel = UILabel()
+      offlineLabel.text = "📱 Offline Mode - Showing cached results"
+      offlineLabel.textAlignment = .center
+      offlineLabel.backgroundColor = .systemYellow.withAlphaComponent(0.8)
+      offlineLabel.textColor = .black
+      offlineLabel.font = .systemFont(ofSize: 12)
+      offlineLabel.layer.cornerRadius = 4
+      offlineLabel.clipsToBounds = true
+
+      // Add to navigation bar
+      navigationItem.titleView = offlineLabel
+    } else {
+      navigationItem.titleView = nil
+    }
+  }
+
   // MARK: - Actions
   @objc private func menuButtonTapped() {
     // TODO: Implement menu functionality
     print("Menu button tapped")
+  }
+
+  @objc private func refreshData() {
+    viewModel.refreshData()
+    refreshControl.endRefreshing()
   }
 }
 
 // MARK: - UITableViewDataSource
 extension MovieSearchViewController: UITableViewDataSource {
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-    return filteredMovies.count
+    return viewModel.filteredMovies.count
   }
 
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-    guard
-      let cell = tableView.dequeueReusableCell(
-        withIdentifier: MovieTableViewCell.identifier, for: indexPath) as? MovieTableViewCell
-    else {
-      return UITableViewCell()
-    }
-
-    let movie = filteredMovies[indexPath.row]
+    let cell =
+      tableView.dequeueReusableCell(withIdentifier: MovieTableViewCell.identifier, for: indexPath)
+      as! MovieTableViewCell
+    let movie = viewModel.filteredMovies[indexPath.row]
     cell.configure(with: movie)
-    cell.selectionStyle = .none
-
     return cell
   }
 }
@@ -329,8 +264,8 @@ extension MovieSearchViewController: UITableViewDelegate {
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
 
-    let movie = filteredMovies[indexPath.row]
-    let detailViewController = MovieDetailViewController(movie: movie, repository: repository)
+    let movie = viewModel.filteredMovies[indexPath.row]
+    let detailViewController = MovieDetailViewController(movie: movie)
     navigationController?.pushViewController(detailViewController, animated: true)
   }
 }
@@ -338,11 +273,11 @@ extension MovieSearchViewController: UITableViewDelegate {
 // MARK: - UITableViewDataSourcePrefetching
 extension MovieSearchViewController: UITableViewDataSourcePrefetching {
   func tableView(_ tableView: UITableView, prefetchRowsAt indexPaths: [IndexPath]) {
-    let thresholdIndex = filteredMovies.count - 5
+    let thresholdIndex = viewModel.filteredMovies.count - 5
 
     for indexPath in indexPaths {
       if indexPath.row >= thresholdIndex {
-        loadMoreResults()
+        viewModel.loadMoreResults()
         break
       }
     }
@@ -353,8 +288,6 @@ extension MovieSearchViewController: UITableViewDataSourcePrefetching {
 extension MovieSearchViewController: UISearchResultsUpdating {
   func updateSearchResults(for searchController: UISearchController) {
     guard let searchText = searchController.searchBar.text else { return }
-
-    isSearching = !searchText.isEmpty
-    searchMovies(query: searchText)
+    viewModel.searchMovies(query: searchText)
   }
 }

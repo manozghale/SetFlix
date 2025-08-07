@@ -103,21 +103,41 @@ class MovieTableViewCell: UITableViewCell {
     }
   }
 
-  private func extractYear(from dateString: String) -> String {
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = "yyyy-MM-dd"
+  private func extractYear(from dateString: String?) -> String {
+    guard let dateString = dateString, !dateString.isEmpty else {
+      return "Year not available"
+    }
 
+    // Handle different date formats from TMDB API
+    let dateFormatter = DateFormatter()
+
+    // Try full date format first (YYYY-MM-DD)
+    dateFormatter.dateFormat = "yyyy-MM-dd"
     if let date = dateFormatter.date(from: dateString) {
       let yearFormatter = DateFormatter()
       yearFormatter.dateFormat = "yyyy"
       return yearFormatter.string(from: date)
     }
 
-    // Fallback: try to extract year from string
-    if let year = dateString.components(separatedBy: "-").first {
-      return year
+    // Try year-only format (YYYY)
+    dateFormatter.dateFormat = "yyyy"
+    if let date = dateFormatter.date(from: dateString) {
+      let yearFormatter = DateFormatter()
+      yearFormatter.dateFormat = "yyyy"
+      return yearFormatter.string(from: date)
     }
 
+    // Fallback: try to extract year from string using regex
+    let yearPattern = #"(\d{4})"#
+    if let regex = try? NSRegularExpression(pattern: yearPattern),
+      let match = regex.firstMatch(
+        in: dateString, range: NSRange(dateString.startIndex..., in: dateString))
+    {
+      let yearRange = Range(match.range(at: 1), in: dateString)!
+      return String(dateString[yearRange])
+    }
+
+    // If all else fails, return the original string
     return dateString
   }
 

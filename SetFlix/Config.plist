@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>TMDB_API_KEY</key>
-	<string>YOUR_API_KEY_HERE</string>
+	<string>60f86181c2a78ad5bccc5ff4209c50a1</string>
 	<key>TMDB_BASE_URL</key>
 	<string>https://api.themoviedb.org/3</string>
 	<key>TMDB_IMAGE_BASE_URL</key>
@@ -13,4 +13,4 @@
 	<key>APP_VERSION</key>
 	<string>1.0.0</string>
 </dict>
-</plist> 
+</plist>

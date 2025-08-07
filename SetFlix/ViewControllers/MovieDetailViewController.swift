@@ -5,6 +5,7 @@
 //  Created by Manoj on 06/08/2025.
 //
 
+import Combine
 import UIKit
 
 class MovieDetailViewController: UIViewController {
@@ -18,15 +19,14 @@ class MovieDetailViewController: UIViewController {
   private let overviewLabel = UILabel()
   private let favoriteButton = UIButton()
 
-  // MARK: - Properties
-  private let movie: Movie
-  private let repository: MovieRepository
-  private var isFavorite = false
+  // MARK: - ViewModel
+  private let viewModel: MovieDetailViewModel
+  private var cancellables = Set<AnyCancellable>()
 
   // MARK: - Initialization
-  init(movie: Movie, repository: MovieRepository) {
-    self.movie = movie
-    self.repository = repository
+  init(movie: Movie, viewModel: MovieDetailViewModel? = nil) {
+    let movieViewModel = viewModel ?? MovieDetailViewModel(movie: movie)
+    self.viewModel = movieViewModel
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -39,8 +39,8 @@ class MovieDetailViewController: UIViewController {
     super.viewDidLoad()
     setupUI()
     setupConstraints()
-    configureWithMovie()
-    checkFavoriteStatus()
+    setupBindings()
+    viewModel.loadMovieDetails()
   }
 
   // MARK: - UI Setup
@@ -48,62 +48,52 @@ class MovieDetailViewController: UIViewController {
     view.backgroundColor = .systemBackground
 
     // Navigation bar setup
-    title = "Movie Details"
     navigationItem.largeTitleDisplayMode = .never
 
-    // Configure scroll view
-    scrollView.translatesAutoresizingMaskIntoConstraints = false
-    contentView.translatesAutoresizingMaskIntoConstraints = false
-
+    // Add subviews
     view.addSubview(scrollView)
     scrollView.addSubview(contentView)
-
-    // Configure poster image view
-    posterImageView.contentMode = .scaleAspectFill
-    posterImageView.clipsToBounds = true
-    posterImageView.layer.cornerRadius = 12
-    posterImageView.backgroundColor = .systemGray5
-    posterImageView.translatesAutoresizingMaskIntoConstraints = false
-
-    // Configure title label
-    titleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
-    titleLabel.textColor = .label
-    titleLabel.numberOfLines = 0
-    titleLabel.translatesAutoresizingMaskIntoConstraints = false
-
-    // Configure year label
-    yearLabel.font = UIFont.systemFont(ofSize: 18, weight: .medium)
-    yearLabel.textColor = .secondaryLabel
-    yearLabel.translatesAutoresizingMaskIntoConstraints = false
-
-    // Configure overview label
-    overviewLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
-    overviewLabel.textColor = .label
-    overviewLabel.numberOfLines = 0
-    overviewLabel.translatesAutoresizingMaskIntoConstraints = false
-
-    // Configure favorite button
-    favoriteButton.setImage(UIImage(systemName: "heart"), for: .normal)
-    favoriteButton.setImage(UIImage(systemName: "heart.fill"), for: .selected)
-    favoriteButton.tintColor = .systemRed
-    favoriteButton.backgroundColor = .systemBackground
-    favoriteButton.layer.cornerRadius = 25
-    favoriteButton.layer.shadowColor = UIColor.black.cgColor
-    favoriteButton.layer.shadowOffset = CGSize(width: 0, height: 2)
-    favoriteButton.layer.shadowRadius = 4
-    favoriteButton.layer.shadowOpacity = 0.1
-    favoriteButton.translatesAutoresizingMaskIntoConstraints = false
-    favoriteButton.addTarget(self, action: #selector(favoriteButtonTapped), for: .touchUpInside)
-
-    // Add subviews to content view
     contentView.addSubview(posterImageView)
     contentView.addSubview(titleLabel)
     contentView.addSubview(yearLabel)
     contentView.addSubview(overviewLabel)
     contentView.addSubview(favoriteButton)
+
+    // Configure poster image view
+    posterImageView.contentMode = .scaleAspectFill
+    posterImageView.clipsToBounds = true
+    posterImageView.layer.cornerRadius = 8
+
+    // Configure title label
+    titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
+    titleLabel.numberOfLines = 0
+    titleLabel.textColor = .label
+
+    // Configure year label
+    yearLabel.font = .systemFont(ofSize: 16, weight: .medium)
+    yearLabel.textColor = .secondaryLabel
+
+    // Configure overview label
+    overviewLabel.font = .systemFont(ofSize: 16)
+    overviewLabel.numberOfLines = 0
+    overviewLabel.textColor = .label
+
+    // Configure favorite button
+    favoriteButton.setImage(UIImage(systemName: "heart"), for: .normal)
+    favoriteButton.setImage(UIImage(systemName: "heart.fill"), for: .selected)
+    favoriteButton.tintColor = .systemRed
+    favoriteButton.addTarget(self, action: #selector(favoriteButtonTapped), for: .touchUpInside)
   }
 
   private func setupConstraints() {
+    scrollView.translatesAutoresizingMaskIntoConstraints = false
+    contentView.translatesAutoresizingMaskIntoConstraints = false
+    posterImageView.translatesAutoresizingMaskIntoConstraints = false
+    titleLabel.translatesAutoresizingMaskIntoConstraints = false
+    yearLabel.translatesAutoresizingMaskIntoConstraints = false
+    overviewLabel.translatesAutoresizingMaskIntoConstraints = false
+    favoriteButton.translatesAutoresizingMaskIntoConstraints = false
+
     NSLayoutConstraint.activate([
       // Scroll view constraints
       scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -120,83 +110,82 @@ class MovieDetailViewController: UIViewController {
 
       // Poster image constraints
       posterImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-      posterImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+      posterImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
       posterImageView.widthAnchor.constraint(equalToConstant: 200),
       posterImageView.heightAnchor.constraint(equalToConstant: 300),
 
       // Title label constraints
-      titleLabel.topAnchor.constraint(equalTo: posterImageView.bottomAnchor, constant: 20),
-      titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+      titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+      titleLabel.leadingAnchor.constraint(equalTo: posterImageView.trailingAnchor, constant: 20),
       titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
 
       // Year label constraints
       yearLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-      yearLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-      yearLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+      yearLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+      yearLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+
+      // Favorite button constraints
+      favoriteButton.topAnchor.constraint(equalTo: yearLabel.bottomAnchor, constant: 16),
+      favoriteButton.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+      favoriteButton.widthAnchor.constraint(equalToConstant: 44),
+      favoriteButton.heightAnchor.constraint(equalToConstant: 44),
 
       // Overview label constraints
-      overviewLabel.topAnchor.constraint(equalTo: yearLabel.bottomAnchor, constant: 20),
+      overviewLabel.topAnchor.constraint(equalTo: posterImageView.bottomAnchor, constant: 20),
       overviewLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
       overviewLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
       overviewLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
-
-      // Favorite button constraints
-      favoriteButton.topAnchor.constraint(equalTo: posterImageView.topAnchor, constant: 10),
-      favoriteButton.trailingAnchor.constraint(
-        equalTo: posterImageView.trailingAnchor, constant: -10),
-      favoriteButton.widthAnchor.constraint(equalToConstant: 50),
-      favoriteButton.heightAnchor.constraint(equalToConstant: 50),
     ])
   }
 
-  // MARK: - Configuration
-  private func configureWithMovie() {
-    titleLabel.text = movie.title
-    yearLabel.text = extractYear(from: movie.releaseDate)
-    overviewLabel.text = "Overview not available for this movie."
-
-    // Load poster image
-    if let posterPath = movie.posterPath {
-      loadPosterImage(from: posterPath)
-    } else {
-      posterImageView.image = UIImage(systemName: "film")
-      posterImageView.tintColor = .systemGray3
-      posterImageView.contentMode = .scaleAspectFit
-    }
-  }
-
-  private func checkFavoriteStatus() {
-    Task {
-      do {
-        let favorite = try await repository.isFavorite(movie.id)
-        await MainActor.run {
-          self.isFavorite = favorite
-          self.favoriteButton.isSelected = favorite
-        }
-      } catch {
-        await MainActor.run {
-          self.showError("Failed to check favorite status: \(error.localizedDescription)")
-        }
+  // MARK: - Setup
+  private func setupBindings() {
+    // Bind movie details to UI
+    viewModel.$movieDetail
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in
+        self?.configureUI()
       }
-    }
+      .store(in: &cancellables)
+
+    // Bind loading state
+    viewModel.$isLoading
+      .receive(on: DispatchQueue.main)
+      .sink { isLoading in
+        // Show/hide loading indicator if needed
+        // Currently no loading indicator implemented
+      }
+      .store(in: &cancellables)
+
+    // Bind error messages
+    viewModel.$errorMessage
+      .compactMap { $0 }
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] errorMessage in
+        self?.showError(errorMessage)
+        self?.viewModel.clearError()
+      }
+      .store(in: &cancellables)
+
+    // Bind favorite state
+    viewModel.$isFavorite
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] isFavorite in
+        self?.favoriteButton.isSelected = isFavorite
+      }
+      .store(in: &cancellables)
   }
 
-  private func extractYear(from dateString: String) -> String {
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = "yyyy-MM-dd"
+  private func configureUI() {
+    titleLabel.text = viewModel.title
+    overviewLabel.text = viewModel.overview
+    yearLabel.text = viewModel.releaseYear
 
-    if let date = dateFormatter.date(from: dateString) {
-      let yearFormatter = DateFormatter()
-      yearFormatter.dateFormat = "yyyy"
-      return yearFormatter.string(from: date)
+    if let posterURL = viewModel.posterURL {
+      loadPosterImage(from: posterURL)
+    } else {
+      posterImageView.image = UIImage(named: "placeholder_poster")
     }
-
-    // Fallback: try to extract year from string
-    if let year = dateString.components(separatedBy: "-").first {
-      return year
-    }
-
-    return dateString
   }
 
   private func loadPosterImage(from path: String) {
@@ -229,30 +218,26 @@ class MovieDetailViewController: UIViewController {
         height: iconSize
       )
 
-      UIColor.systemGray3.setFill()
+      let config = UIImage.SymbolConfiguration(pointSize: iconSize, weight: .light)
+      let filmIcon = UIImage(systemName: "film", withConfiguration: config)
+      filmIcon?.draw(in: iconRect)
 
-      // Draw a simple film icon
-      let path = UIBezierPath()
-      path.move(to: CGPoint(x: iconRect.minX + 8, y: iconRect.minY))
-      path.addLine(to: CGPoint(x: iconRect.maxX - 8, y: iconRect.minY))
-      path.addLine(to: CGPoint(x: iconRect.maxX - 8, y: iconRect.maxY))
-      path.addLine(to: CGPoint(x: iconRect.minX + 8, y: iconRect.maxY))
-      path.close()
-      path.fill()
+      // Text
+      let text = "No Image"
+      let attributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: 14, weight: .medium),
+        .foregroundColor: UIColor.systemGray,
+      ]
 
-      // Draw film perforations
-      let perforationWidth: CGFloat = 4
-      let perforationHeight: CGFloat = 8
-      let spacing: CGFloat = 12
+      let textSize = text.size(withAttributes: attributes)
+      let textRect = CGRect(
+        x: (size.width - textSize.width) / 2,
+        y: iconRect.maxY + 8,
+        width: textSize.width,
+        height: textSize.height
+      )
 
-      for i in 0..<3 {
-        let x = iconRect.minX + 4 + CGFloat(i) * spacing
-        let y = iconRect.minY + 8
-
-        let perforationRect = CGRect(x: x, y: y, width: perforationWidth, height: perforationHeight)
-        UIColor.systemBackground.setFill()
-        UIBezierPath(rect: perforationRect).fill()
-      }
+      text.draw(in: textRect, withAttributes: attributes)
     }
   }
 
@@ -264,28 +249,6 @@ class MovieDetailViewController: UIViewController {
 
   // MARK: - Actions
   @objc private func favoriteButtonTapped() {
-    Task {
-      do {
-        let newFavoriteStatus = try await repository.toggleFavorite(movie.id)
-        await MainActor.run {
-          self.isFavorite = newFavoriteStatus
-          self.favoriteButton.isSelected = newFavoriteStatus
-
-          // Show feedback
-          let message = newFavoriteStatus ? "Added to favorites" : "Removed from favorites"
-          self.showSuccessMessage(message)
-        }
-      } catch {
-        await MainActor.run {
-          self.showError("Failed to update favorite status: \(error.localizedDescription)")
-        }
-      }
-    }
-  }
-
-  private func showSuccessMessage(_ message: String) {
-    let alert = UIAlertController(title: "Success", message: message, preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "OK", style: .default))
-    present(alert, animated: true)
+    viewModel.toggleFavorite()
   }
 }

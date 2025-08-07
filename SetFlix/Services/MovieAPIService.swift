@@ -11,6 +11,10 @@ import Foundation
 protocol MovieAPIService {
   func searchMovies(query: String, page: Int) async throws -> MovieSearchResponse
   func getMovieDetails(id: Int) async throws -> MovieDetail
+  func getPopularMovies(page: Int) async throws -> MovieSearchResponse
+  func getTrendingMovies(page: Int) async throws -> MovieSearchResponse
+  func getMovieChanges(startDate: String, endDate: String, page: Int) async throws
+    -> MovieChangesResponse
 }
 
 // MARK: - TMDB API Implementation
@@ -39,6 +43,26 @@ class TMDBAPIService: MovieAPIService {
     return try await performRequest(url: url)
   }
 
+  // MARK: - Get Popular Movies
+  func getPopularMovies(page: Int) async throws -> MovieSearchResponse {
+    let url = buildPopularMoviesURL(page: page)
+    return try await performRequest(url: url)
+  }
+
+  // MARK: - Get Trending Movies
+  func getTrendingMovies(page: Int) async throws -> MovieSearchResponse {
+    let url = buildTrendingMoviesURL(page: page)
+    return try await performRequest(url: url)
+  }
+
+  // MARK: - Get Movie Changes
+  func getMovieChanges(startDate: String, endDate: String, page: Int) async throws
+    -> MovieChangesResponse
+  {
+    let url = buildMovieChangesURL(startDate: startDate, endDate: endDate, page: page)
+    return try await performRequest(url: url)
+  }
+
   // MARK: - Private Methods
 
   private func performRequest<T: Codable>(url: URL) async throws -> T {
@@ -54,10 +78,21 @@ class TMDBAPIService: MovieAPIService {
         throw NetworkError.from(statusCode: httpResponse.statusCode)
       }
 
+      // Debug: Print the actual JSON response
+      if let jsonString = String(data: data, encoding: .utf8) {
+        print("🔍 API Response for \(url):")
+        // Print only first 1000 characters to avoid overwhelming logs
+        let truncated = String(jsonString.prefix(1000))
+        print(truncated)
+        if jsonString.count > 1000 {
+          print("... (truncated)")
+        }
+      }
+
       do {
         return try decoder.decode(T.self, from: data)
       } catch {
-        print("Decoding error: \(error)")
+        print("❌ Decoding error: \(error)")
         throw NetworkError.decodingError
       }
     } catch let error as NetworkError {
@@ -103,6 +138,36 @@ class TMDBAPIService: MovieAPIService {
     return components.url!
   }
 
+  private func buildPopularMoviesURL(page: Int) -> URL {
+    var components = URLComponents(string: "\(baseURL)/movie/popular")!
+    components.queryItems = [
+      URLQueryItem(name: "api_key", value: apiKey),
+      URLQueryItem(name: "page", value: "\(page)"),
+      URLQueryItem(name: "language", value: "en-US"),
+    ]
+    return components.url!
+  }
+
+  private func buildTrendingMoviesURL(page: Int) -> URL {
+    var components = URLComponents(string: "\(baseURL)/trending/movie/week")!
+    components.queryItems = [
+      URLQueryItem(name: "api_key", value: apiKey),
+      URLQueryItem(name: "page", value: "\(page)"),
+      URLQueryItem(name: "language", value: "en-US"),
+    ]
+    return components.url!
+  }
+
+  private func buildMovieChangesURL(startDate: String, endDate: String, page: Int) -> URL {
+    var components = URLComponents(string: "\(baseURL)/movie/changes")!
+    components.queryItems = [
+      URLQueryItem(name: "api_key", value: apiKey),
+      URLQueryItem(name: "start_date", value: startDate),
+      URLQueryItem(name: "end_date", value: endDate),
+      URLQueryItem(name: "page", value: "\(page)"),
+    ]
+    return components.url!
+  }
 }
 
 // MARK: - API Configuration

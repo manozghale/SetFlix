@@ -20,8 +20,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // Create window
     window = UIWindow(windowScene: windowScene)
 
-    // Create navigation controller with search view controller
-    let searchViewController = MovieSearchViewController()
+    // Create view model and view controller
+    let viewModel = MovieSearchViewModel()
+    let searchViewController = MovieSearchViewController(viewModel: viewModel)
     let navigationController = UINavigationController(rootViewController: searchViewController)
 
     // Configure navigation controller
@@ -62,6 +63,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     // Save changes in the application's managed object context when the application transitions to the background.
     (UIApplication.shared.delegate as? AppDelegate)?.saveContext()
+
+    // Clean up old cache when app goes to background
+    Task {
+      let repository = MovieRepositoryFactory.createRepository()
+      repository.clearOldCache(olderThan: 7)  // Clear cache older than 7 days
+    }
   }
 
 }

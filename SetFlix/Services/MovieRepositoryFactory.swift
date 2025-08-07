@@ -8,27 +8,14 @@
 import Foundation
 
 class MovieRepositoryFactory {
-
-  // MARK: - Singleton
-  static let shared = MovieRepositoryFactory()
-
-  private init() {}
-
-  // MARK: - Repository Creation
   static func createRepository() -> MovieRepository {
-    let configurationManager = ConfigurationManager.shared
-    let apiService = TMDBAPIService(apiKey: configurationManager.tmdbAPIKey)
-    let coreDataManager = CoreDataManager.shared
+    let apiKey = ConfigurationManager.shared.tmdbAPIKey
+    let apiService = TMDBAPIService(apiKey: apiKey)
     let networkReachability = NetworkReachabilityService.shared
 
-    return MovieRepositoryImpl(
-      apiService: apiService,
-      coreDataManager: coreDataManager,
-      networkReachability: networkReachability
-    )
+    return MovieRepositoryImpl(apiService: apiService, networkReachability: networkReachability)
   }
 
-  // MARK: - Mock Repository (for testing)
   static func createMockRepository() -> MovieRepository {
     return MockMovieRepository()
   }
@@ -36,32 +23,52 @@ class MovieRepositoryFactory {
 
 // MARK: - Mock Repository for Testing
 class MockMovieRepository: MovieRepository {
-
-  private var favorites: Set<Int> = []
-  private var mockMovies: [Movie] = [
+  private let mockMovies = [
     Movie(
       id: 1, title: "The Enigma Code", releaseDate: "2022-01-15",
-      posterPath: "/sample1.jpg"),
+      posterPath: "/mock-poster-1.jpg"
+    ),
     Movie(
       id: 2, title: "Starlight Symphony", releaseDate: "2023-03-22",
-      posterPath: "/sample2.jpg"),
+      posterPath: "/mock-poster-2.jpg"
+    ),
     Movie(
       id: 3, title: "Echoes of the Past", releaseDate: "2021-11-08",
-      posterPath: "/sample3.jpg"),
+      posterPath: "/mock-poster-3.jpg"
+    ),
   ]
 
-  private var mockMovieDetails: [Int: String] = [
-    1: "A thrilling mystery about code breaking during World War II.",
-    2: "A musical journey through space with stunning visuals and orchestral scores.",
-    3: "A haunting tale of memories and the past that refuses to stay buried.",
+  private let mockMovieDetails = [
+    1: MovieDetail(
+      id: 1,
+      title: "The Enigma Code",
+      releaseDate: "2022-01-15",
+      overview: "A thrilling mystery about a code that could change the world.",
+      posterPath: "/mock-poster-1.jpg"
+    ),
+    2: MovieDetail(
+      id: 2,
+      title: "Starlight Symphony",
+      releaseDate: "2023-03-22",
+      overview: "A musical journey through the cosmos.",
+      posterPath: "/mock-poster-2.jpg"
+    ),
+    3: MovieDetail(
+      id: 3,
+      title: "Echoes of the Past",
+      releaseDate: "2021-11-08",
+      overview: "A haunting tale of memories and redemption.",
+      posterPath: "/mock-poster-3.jpg"
+    ),
   ]
 
+  // MARK: - API Methods
   func searchMovies(query: String, page: Int) async throws -> MovieSearchResponse {
-    // Simulate network delay
+    // Simulate API delay
     try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
 
     let filteredMovies = mockMovies.filter { movie in
-      movie.title.localizedCaseInsensitiveContains(query)
+      query.isEmpty || movie.title.localizedCaseInsensitiveContains(query)
     }
 
     return MovieSearchResponse(
@@ -73,47 +80,112 @@ class MockMovieRepository: MovieRepository {
   }
 
   func getMovieDetails(id: Int) async throws -> MovieDetail {
-    // Simulate network delay
+    // Simulate API delay
     try await Task.sleep(nanoseconds: 300_000_000)  // 0.3 seconds
 
-    guard let movie = mockMovies.first(where: { $0.id == id }) else {
+    guard let movieDetail = mockMovieDetails[id] else {
       throw NetworkError.invalidResponse
     }
 
-    let overview = mockMovieDetails[id] ?? "No overview available."
+    return movieDetail
+  }
 
-    return MovieDetail(
-      id: movie.id,
-      title: movie.title,
-      releaseDate: movie.releaseDate,
-      overview: overview,
-      posterPath: movie.posterPath
+  func getPopularMovies(page: Int) async throws -> MovieSearchResponse {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 400_000_000)  // 0.4 seconds
+
+    return MovieSearchResponse(
+      page: page,
+      results: mockMovies,
+      totalPages: 1,
+      totalResults: mockMovies.count
     )
   }
 
-  func saveToFavorites(_ movie: Movie) async throws {
-    favorites.insert(movie.id)
+  func getTrendingMovies(page: Int) async throws -> MovieSearchResponse {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 400_000_000)  // 0.4 seconds
+
+    return MovieSearchResponse(
+      page: page,
+      results: mockMovies,
+      totalPages: 1,
+      totalResults: mockMovies.count
+    )
   }
 
-  func getFavorites() async throws -> [Movie] {
-    return mockMovies.filter { favorites.contains($0.id) }
+  func getMovieChanges(startDate: String, endDate: String, page: Int) async throws
+    -> MovieChangesResponse
+  {
+    // Simulate API delay
+    try await Task.sleep(nanoseconds: 400_000_000)  // 0.4 seconds
+
+    return MovieChangesResponse(
+      page: page,
+      results: [],
+      totalPages: 1,
+      totalResults: 0
+    )
   }
 
-  func removeFromFavorites(_ movieId: Int) async throws {
-    favorites.remove(movieId)
+  // MARK: - Caching Methods
+  func getCachedMovies() -> MovieSearchResponse {
+    return MovieSearchResponse(
+      page: 1,
+      results: mockMovies,
+      totalPages: 1,
+      totalResults: mockMovies.count
+    )
   }
 
-  func toggleFavorite(_ movieId: Int) async throws -> Bool {
-    if favorites.contains(movieId) {
-      favorites.remove(movieId)
-      return false
-    } else {
-      favorites.insert(movieId)
-      return true
+  func getCachedMovies(for query: String) -> MovieSearchResponse {
+    let filteredMovies = mockMovies.filter { movie in
+      query.isEmpty || movie.title.localizedCaseInsensitiveContains(query)
     }
+
+    return MovieSearchResponse(
+      page: 1,
+      results: filteredMovies,
+      totalPages: 1,
+      totalResults: filteredMovies.count
+    )
   }
 
-  func isFavorite(_ movieId: Int) async throws -> Bool {
-    return favorites.contains(movieId)
+  func getCachedPopularMovies() -> MovieSearchResponse {
+    return MovieSearchResponse(
+      page: 1,
+      results: mockMovies,
+      totalPages: 1,
+      totalResults: mockMovies.count
+    )
+  }
+
+  func getCachedMovieDetails(id: Int) -> MovieDetail? {
+    return mockMovieDetails[id]
+  }
+
+  func saveSearchResults(_ response: MovieSearchResponse, for query: String) {
+    // Mock implementation - no actual caching in mock
+    print("Mock: Would save search results for '\(query)'")
+  }
+
+  func savePopularMovies(_ response: MovieSearchResponse) {
+    // Mock implementation - no actual caching in mock
+    print("Mock: Would save popular movies")
+  }
+
+  func saveMovieDetails(_ movieDetail: MovieDetail) {
+    // Mock implementation - no actual caching in mock
+    print("Mock: Would save movie details for ID \(movieDetail.id)")
+  }
+
+  func clearOldCache(olderThan days: Int) {
+    // Mock implementation - no actual cache clearing in mock
+    print("Mock: Would clear cache older than \(days) days")
+  }
+
+  func isNetworkAvailable() -> Bool {
+    // Mock implementation - always return true for testing
+    return true
   }
 }
