@@ -78,7 +78,6 @@ class MovieRepositoryImpl: MovieRepository {
       id: movieDetail.id,
       title: movieDetail.title,
       releaseDate: movieDetail.releaseDate,
-      overview: movieDetail.overview,
       posterPath: movieDetail.posterPath
     )
     coreDataManager.saveMovie(movie)
@@ -111,14 +110,5 @@ class MovieRepositoryImpl: MovieRepository {
       return false
     }
     return movieEntity.isFavorite
-  }
-}
-
-// MARK: - Repository Factory
-class MovieRepositoryFactory {
-  static func createRepository() -> MovieRepository {
-    let apiKey = ConfigurationManager.shared.tmdbAPIKey
-    let apiService = TMDBAPIService(apiKey: apiKey)
-    return MovieRepositoryImpl(apiService: apiService)
   }
 }

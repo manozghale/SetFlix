@@ -17,9 +17,9 @@ class MovieRepositoryFactory {
   // MARK: - Repository Creation
   static func createRepository() -> MovieRepository {
     let configurationManager = ConfigurationManager.shared
-    let apiService = TMDBAPIService(apiKey: configurationManager.tmdbApiKey)
+    let apiService = TMDBAPIService(apiKey: configurationManager.tmdbAPIKey)
     let coreDataManager = CoreDataManager.shared
-    let networkReachability = NetworkReachabilityService()
+    let networkReachability = NetworkReachabilityService.shared
 
     return MovieRepositoryImpl(
       apiService: apiService,
@@ -41,13 +41,19 @@ class MockMovieRepository: MovieRepository {
   private var mockMovies: [Movie] = [
     Movie(
       id: 1, title: "The Enigma Code", releaseDate: "2022-01-15",
-      overview: "A thrilling mystery about code breaking", posterPath: "/sample1.jpg"),
+      posterPath: "/sample1.jpg"),
     Movie(
       id: 2, title: "Starlight Symphony", releaseDate: "2023-03-22",
-      overview: "A musical journey through space", posterPath: "/sample2.jpg"),
+      posterPath: "/sample2.jpg"),
     Movie(
       id: 3, title: "Echoes of the Past", releaseDate: "2021-11-08",
-      overview: "A haunting tale of memories", posterPath: "/sample3.jpg"),
+      posterPath: "/sample3.jpg"),
+  ]
+
+  private var mockMovieDetails: [Int: String] = [
+    1: "A thrilling mystery about code breaking during World War II.",
+    2: "A musical journey through space with stunning visuals and orchestral scores.",
+    3: "A haunting tale of memories and the past that refuses to stay buried.",
   ]
 
   func searchMovies(query: String, page: Int) async throws -> MovieSearchResponse {
@@ -74,11 +80,13 @@ class MockMovieRepository: MovieRepository {
       throw NetworkError.invalidResponse
     }
 
+    let overview = mockMovieDetails[id] ?? "No overview available."
+
     return MovieDetail(
       id: movie.id,
       title: movie.title,
       releaseDate: movie.releaseDate,
-      overview: movie.overview,
+      overview: overview,
       posterPath: movie.posterPath
     )
   }

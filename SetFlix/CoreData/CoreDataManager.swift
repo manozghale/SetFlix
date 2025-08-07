@@ -48,7 +48,7 @@ class CoreDataManager {
     let movieEntity = MovieEntity(context: context)
     movieEntity.id = Int64(movie.id)
     movieEntity.title = movie.title
-    movieEntity.overview = movie.overview
+
     movieEntity.posterURL = movie.posterURL
     movieEntity.isFavorite = isFavorite
 
@@ -226,7 +226,6 @@ extension MovieEntity {
       id: Int(id),
       title: title,
       releaseDate: releaseDateString,
-      overview: overview ?? "",
       posterPath: posterURL?.replacingOccurrences(of: "https://image.tmdb.org/t/p/w500", with: "")
     )
   }

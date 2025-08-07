@@ -153,7 +153,7 @@ class MovieDetailViewController: UIViewController {
   private func configureWithMovie() {
     titleLabel.text = movie.title
     yearLabel.text = extractYear(from: movie.releaseDate)
-    overviewLabel.text = movie.overview
+    overviewLabel.text = "Overview not available for this movie."
 
     // Load poster image
     if let posterPath = movie.posterPath {
@@ -200,11 +200,13 @@ class MovieDetailViewController: UIViewController {
   }
 
   private func loadPosterImage(from path: String) {
+    // Set placeholder first
+    posterImageView.image = createPlaceholderImage(for: path)
+    posterImageView.contentMode = .scaleAspectFill
+
     // Use ImageLoader for real image loading
-    posterImageView.loadImageAsync(from: path, size: "w500") { [weak self] in
-      // Set placeholder while loading
-      self?.posterImageView.image = self?.createPlaceholderImage(for: path)
-      self?.posterImageView.contentMode = .scaleAspectFill
+    Task {
+      await posterImageView.loadImageAsync(from: path, size: "w500")
     }
   }
 

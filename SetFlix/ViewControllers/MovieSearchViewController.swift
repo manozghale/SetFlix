@@ -163,25 +163,25 @@ class MovieSearchViewController: UIViewController {
     movies = [
       Movie(
         id: 1, title: "The Enigma Code", releaseDate: "2022-01-15",
-        overview: "A thrilling mystery about code breaking", posterPath: "/sample1.jpg"),
+        posterPath: "/sample1.jpg"),
       Movie(
         id: 2, title: "Starlight Symphony", releaseDate: "2023-03-22",
-        overview: "A musical journey through space", posterPath: "/sample2.jpg"),
+        posterPath: "/sample2.jpg"),
       Movie(
         id: 3, title: "Echoes of the Past", releaseDate: "2021-11-08",
-        overview: "A haunting tale of memories", posterPath: "/sample3.jpg"),
+        posterPath: "/sample3.jpg"),
       Movie(
         id: 4, title: "Crimson Horizon", releaseDate: "2022-07-14",
-        overview: "An epic adventure at dawn", posterPath: "/sample4.jpg"),
+        posterPath: "/sample4.jpg"),
       Movie(
         id: 5, title: "Whispers of the Wind", releaseDate: "2023-05-30",
-        overview: "A story of nature's voice", posterPath: "/sample5.jpg"),
+        posterPath: "/sample5.jpg"),
       Movie(
         id: 6, title: "The Silent Observer", releaseDate: "2021-09-12",
-        overview: "A tale of quiet observation", posterPath: "/sample6.jpg"),
+        posterPath: "/sample6.jpg"),
       Movie(
         id: 7, title: "Beneath the Surface", releaseDate: "2022-12-03",
-        overview: "Exploring hidden depths", posterPath: "/sample7.jpg"),
+        posterPath: "/sample7.jpg"),
     ]
 
     filteredMovies = movies

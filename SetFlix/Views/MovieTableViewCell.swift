@@ -127,8 +127,8 @@ class MovieTableViewCell: UITableViewCell {
     posterImageView.contentMode = .scaleAspectFill
 
     // Load real image using ImageLoader
-    posterImageView.loadImageAsync(from: path, size: "w92") { [weak self] in
-      // Image loaded successfully, placeholder will be replaced
+    Task {
+      await posterImageView.loadImageAsync(from: path, size: "w92")
     }
   }
 
