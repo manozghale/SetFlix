@@ -24,8 +24,8 @@ class MovieSearchViewModel: ObservableObject {
 
   // MARK: - Private Properties
   private let repository: MovieRepository
-  private var currentPage = 1
-  private var currentQuery = ""
+  internal var currentPage = 1
+  internal var currentQuery = ""
   private var searchTask: Task<Void, Never>?
   private var cancellables = Set<AnyCancellable>()
 
@@ -399,6 +399,25 @@ class MovieSearchViewModel: ObservableObject {
     } catch {
       print("❌ Failed to decode search results from UserDefaults: \(error)")
       return []
+    }
+  }
+
+  // MARK: - Favorite Status Updates
+
+  /// Refresh favorite status for all currently displayed movies
+  func refreshFavoriteStatus() {
+    Task {
+      if !currentQuery.isEmpty {
+        // Refresh search results
+        let updatedMovies = await preserveFavoriteStatus(for: filteredMovies)
+        filteredMovies = updatedMovies
+        saveLastSearchResults(updatedMovies)
+      } else {
+        // Refresh popular movies
+        let updatedMovies = await preserveFavoriteStatus(for: movies)
+        movies = updatedMovies
+        filteredMovies = updatedMovies
+      }
     }
   }
 }

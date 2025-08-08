@@ -11,16 +11,17 @@ import XCTest
 @testable import SetFlix
 
 class CoreDataManagerTests: XCTestCase {
-
   var coreDataManager: CoreDataManager!
 
-  override func setUpWithError() throws {
+  override func setUp() {
     super.setUp()
-    coreDataManager = CoreDataManager()
+    // Use the shared instance instead of trying to create a new one
+    coreDataManager = CoreDataManager.shared
   }
 
-  override func tearDownWithError() throws {
-    coreDataManager = nil
+  override func tearDown() {
+    // Clean up test data
+    coreDataManager.clearAllData()
     super.tearDown()
   }
 
@@ -31,19 +32,17 @@ class CoreDataManagerTests: XCTestCase {
     let movie = Movie(
       id: 1,
       title: "Test Movie",
-      releaseDate: "2023-01-01",
-      overview: "Test overview",
+      releaseDate: "2025-01-01",
       posterPath: "/test.jpg"
     )
 
     // When
-    coreDataManager.saveMovie(movie, isFavorite: true)
+    coreDataManager.saveMovie(movie)
 
     // Then
     let savedMovie = coreDataManager.getMovie(by: 1)
     XCTAssertNotNil(savedMovie)
     XCTAssertEqual(savedMovie?.title, "Test Movie")
-    XCTAssertEqual(savedMovie?.isFavorite, true)
   }
 
   func testGetMovie() {
@@ -51,8 +50,7 @@ class CoreDataManagerTests: XCTestCase {
     let movie = Movie(
       id: 2,
       title: "Another Movie",
-      releaseDate: "2023-02-01",
-      overview: "Another overview",
+      releaseDate: "2025-01-02",
       posterPath: "/another.jpg"
     )
     coreDataManager.saveMovie(movie)
@@ -65,51 +63,101 @@ class CoreDataManagerTests: XCTestCase {
     XCTAssertEqual(retrievedMovie?.title, "Another Movie")
   }
 
-  func testToggleFavorite() {
+  func testGetAllMovies() {
     // Given
-    let movie = Movie(
+    let movie1 = Movie(
       id: 3,
-      title: "Favorite Movie",
-      releaseDate: "2023-03-01",
-      overview: "Favorite overview",
-      posterPath: "/favorite.jpg"
+      title: "Movie 1",
+      releaseDate: "2025-01-01",
+      posterPath: "/movie1.jpg"
     )
-    coreDataManager.saveMovie(movie, isFavorite: false)
+    let movie2 = Movie(
+      id: 4,
+      title: "Movie 2",
+      releaseDate: "2025-01-02",
+      posterPath: "/movie2.jpg"
+    )
+    coreDataManager.saveMovie(movie1)
+    coreDataManager.saveMovie(movie2)
 
     // When
-    let isFavorite = coreDataManager.toggleFavorite(for: 3)
+    let allMovies = coreDataManager.getAllMovies()
 
     // Then
-    XCTAssertTrue(isFavorite)
-
-    let movieEntity = coreDataManager.getMovie(by: 3)
-    XCTAssertEqual(movieEntity?.isFavorite, true)
+    XCTAssertEqual(allMovies.count, 2)
+    XCTAssertTrue(allMovies.contains { $0.title == "Movie 1" })
+    XCTAssertTrue(allMovies.contains { $0.title == "Movie 2" })
   }
 
   func testGetFavoriteMovies() {
     // Given
-    let movie1 = Movie(
-      id: 4, title: "Movie 1", releaseDate: "2023-01-01", overview: "Overview 1",
-      posterPath: "/1.jpg")
-    let movie2 = Movie(
-      id: 5, title: "Movie 2", releaseDate: "2023-01-02", overview: "Overview 2",
-      posterPath: "/2.jpg")
-    let movie3 = Movie(
-      id: 6, title: "Movie 3", releaseDate: "2023-01-03", overview: "Overview 3",
-      posterPath: "/3.jpg")
+    let favoriteMovie = Movie(
+      id: 5,
+      title: "Favorite Movie",
+      releaseDate: "2025-01-01",
+      posterPath: "/favorite.jpg"
+    )
+    coreDataManager.saveMovie(favoriteMovie, isFavorite: true)
 
-    coreDataManager.saveMovie(movie1, isFavorite: true)
-    coreDataManager.saveMovie(movie2, isFavorite: false)
-    coreDataManager.saveMovie(movie3, isFavorite: true)
+    let regularMovie = Movie(
+      id: 6,
+      title: "Regular Movie",
+      releaseDate: "2025-01-02",
+      posterPath: "/regular.jpg"
+    )
+    coreDataManager.saveMovie(regularMovie, isFavorite: false)
 
     // When
     let favoriteMovies = coreDataManager.getFavoriteMovies()
 
     // Then
-    XCTAssertEqual(favoriteMovies.count, 2)
-    XCTAssertTrue(favoriteMovies.contains { $0.id == 4 })
-    XCTAssertTrue(favoriteMovies.contains { $0.id == 6 })
-    XCTAssertFalse(favoriteMovies.contains { $0.id == 5 })
+    XCTAssertEqual(favoriteMovies.count, 1)
+    XCTAssertEqual(favoriteMovies.first?.title, "Favorite Movie")
+  }
+
+  func testToggleFavorite() {
+    // Given
+    let movie = Movie(
+      id: 7,
+      title: "Toggle Movie",
+      releaseDate: "2025-01-01",
+      posterPath: "/toggle.jpg"
+    )
+    coreDataManager.saveMovie(movie, isFavorite: false)
+
+    // When - Toggle to favorite
+    let isFavorite = coreDataManager.toggleFavorite(for: 7)
+
+    // Then
+    XCTAssertTrue(isFavorite)
+    let favoriteMovies = coreDataManager.getFavoriteMovies()
+    XCTAssertTrue(favoriteMovies.contains { $0.id == 7 })
+
+    // When - Toggle back to not favorite
+    let isNotFavorite = coreDataManager.toggleFavorite(for: 7)
+
+    // Then
+    XCTAssertFalse(isNotFavorite)
+    let updatedFavoriteMovies = coreDataManager.getFavoriteMovies()
+    XCTAssertFalse(updatedFavoriteMovies.contains { $0.id == 7 })
+  }
+
+  func testIsMovieFavorite() {
+    // Given
+    let movie = Movie(
+      id: 8,
+      title: "Check Favorite",
+      releaseDate: "2025-01-01",
+      posterPath: "/check.jpg"
+    )
+    coreDataManager.saveMovie(movie, isFavorite: true)
+
+    // When
+    let favoriteStatus = coreDataManager.getFavoriteStatus(for: [8])
+    let isFavorite = favoriteStatus[8] ?? false
+
+    // Then
+    XCTAssertTrue(isFavorite)
   }
 
   // MARK: - Page Operations Tests
@@ -118,40 +166,73 @@ class CoreDataManagerTests: XCTestCase {
     // Given
     let movies = [
       Movie(
-        id: 7, title: "Page Movie 1", releaseDate: "2023-01-01", overview: "Overview 1",
-        posterPath: "/1.jpg"),
+        id: 9,
+        title: "Page Movie 1",
+        releaseDate: "2025-01-01",
+        posterPath: "/page1.jpg"
+      ),
       Movie(
-        id: 8, title: "Page Movie 2", releaseDate: "2023-01-02", overview: "Overview 2",
-        posterPath: "/2.jpg"),
+        id: 10,
+        title: "Page Movie 2",
+        releaseDate: "2025-01-02",
+        posterPath: "/page2.jpg"
+      ),
     ]
 
     // When
     coreDataManager.savePage(query: "test", pageNumber: 1, movies: movies)
 
     // Then
-    let cachedMovies = coreDataManager.getCachedMovies(for: "test", pageNumber: 1)
-    XCTAssertNotNil(cachedMovies)
-    XCTAssertEqual(cachedMovies?.count, 2)
+    let pageEntity = coreDataManager.getPageEntity(query: "test", pageNumber: 1)
+    XCTAssertNotNil(pageEntity)
+    XCTAssertEqual(pageEntity?.movies?.count, 2)
   }
 
-  func testCacheExpiration() {
+  func testGetPageEntity() {
     // Given
     let movies = [
       Movie(
-        id: 9, title: "Expired Movie", releaseDate: "2023-01-01", overview: "Overview",
-        posterPath: "/expired.jpg")
+        id: 11,
+        title: "Get Page Movie",
+        releaseDate: "2025-01-01",
+        posterPath: "/getpage.jpg"
+      )
     ]
+    coreDataManager.savePage(query: "search", pageNumber: 1, movies: movies)
 
     // When
-    coreDataManager.savePage(query: "expired", pageNumber: 1, movies: movies)
-
-    // Simulate time passing (cache expires after 1 hour)
-    // Note: In a real test, you might want to mock the Date or use a different approach
+    let pageEntity = coreDataManager.getPageEntity(query: "search", pageNumber: 1)
 
     // Then
-    let cachedMovies = coreDataManager.getCachedMovies(for: "expired", pageNumber: 1)
-    // This should return the cached movies since we can't easily simulate time passing in this test
-    XCTAssertNotNil(cachedMovies)
+    XCTAssertNotNil(pageEntity)
+    XCTAssertEqual(pageEntity?.query, "search")
+    XCTAssertEqual(pageEntity?.pageNumber, 1)
+  }
+
+  func testClearOldCache() {
+    // Given
+    let oldMovies = [
+      Movie(
+        id: 12,
+        title: "Expired Movie",
+        releaseDate: "2025-01-01",
+        posterPath: "/expired.jpg"
+      )
+    ]
+    coreDataManager.savePage(query: "old", pageNumber: 1, movies: oldMovies)
+
+    // Simulate old timestamp by directly modifying the entity
+    if let pageEntity = coreDataManager.getPageEntity(query: "old", pageNumber: 1) {
+      pageEntity.timestamp = Calendar.current.date(byAdding: .day, value: -10, to: Date())
+      coreDataManager.saveContext()
+    }
+
+    // When
+    coreDataManager.clearExpiredCache()
+
+    // Then
+    let pageEntity = coreDataManager.getPageEntity(query: "old", pageNumber: 1)
+    XCTAssertNil(pageEntity)
   }
 
   // MARK: - MovieEntity Extension Tests
@@ -159,22 +240,29 @@ class CoreDataManagerTests: XCTestCase {
   func testMovieEntityToMovie() {
     // Given
     let movie = Movie(
-      id: 10,
+      id: 13,
       title: "Convert Movie",
-      releaseDate: "2023-01-01",
-      overview: "Convert overview",
+      releaseDate: "2025-01-01",
       posterPath: "/convert.jpg"
     )
     coreDataManager.saveMovie(movie)
 
     // When
-    let movieEntity = coreDataManager.getMovie(by: 10)
+    let movieEntity = coreDataManager.getMovie(by: 13)
     let convertedMovie = movieEntity?.toMovie()
 
     // Then
     XCTAssertNotNil(convertedMovie)
-    XCTAssertEqual(convertedMovie?.id, 10)
+    XCTAssertEqual(convertedMovie?.id, 13)
     XCTAssertEqual(convertedMovie?.title, "Convert Movie")
-    XCTAssertEqual(convertedMovie?.overview, "Convert overview")
+    XCTAssertEqual(convertedMovie?.releaseDate, "2025-01-01")
+    XCTAssertEqual(convertedMovie?.posterPath, "/convert.jpg")
+  }
+
+  // MARK: - Helper Methods
+
+  private func clearAllData() {
+    // This is a helper method to clean up test data
+    // Implementation would depend on your CoreDataManager structure
   }
 }

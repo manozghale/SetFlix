@@ -37,10 +37,10 @@ protocol MovieRepository {
 // MARK: - Repository Implementation
 class MovieRepositoryImpl: MovieRepository {
   private let apiService: MovieAPIService
-  private let networkReachability: NetworkReachabilityService
+  private let networkReachability: NetworkReachabilityProtocol
   private let cacheManager = CacheManager.shared
 
-  init(apiService: MovieAPIService, networkReachability: NetworkReachabilityService) {
+  init(apiService: MovieAPIService, networkReachability: NetworkReachabilityProtocol) {
     self.apiService = apiService
     self.networkReachability = networkReachability
   }

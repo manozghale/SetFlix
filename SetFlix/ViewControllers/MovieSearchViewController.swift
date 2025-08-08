@@ -42,6 +42,12 @@ class MovieSearchViewController: UIViewController {
     viewModel.loadInitialData()
   }
 
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    // Refresh favorite status when returning from detail view
+    viewModel.refreshFavoriteStatus()
+  }
+
   // MARK: - UI Setup
   private func setupUI() {
     view.backgroundColor = .systemBackground
@@ -49,15 +55,6 @@ class MovieSearchViewController: UIViewController {
     // Navigation bar setup
     title = "Movies"
     navigationController?.navigationBar.prefersLargeTitles = true
-
-    // Add favorites button to navigation bar
-    let favoritesButton = UIBarButtonItem(
-      image: UIImage(systemName: "heart.fill"),
-      style: .plain,
-      target: self,
-      action: #selector(favoritesButtonTapped)
-    )
-    navigationItem.rightBarButtonItem = favoritesButton
 
     // Add subviews
     view.addSubview(tableView)
@@ -238,11 +235,6 @@ class MovieSearchViewController: UIViewController {
   }
 
   // MARK: - Actions
-  @objc private func favoritesButtonTapped() {
-    let favoritesViewController = FavoritesViewController()
-    navigationController?.pushViewController(favoritesViewController, animated: true)
-  }
-
   @objc private func refreshData() {
     viewModel.refreshData()
     refreshControl.endRefreshing()

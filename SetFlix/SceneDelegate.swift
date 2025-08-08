@@ -20,17 +20,44 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // Create window
     window = UIWindow(windowScene: windowScene)
 
-    // Create view model and view controller
-    let viewModel = MovieSearchViewModel()
-    let searchViewController = MovieSearchViewController(viewModel: viewModel)
-    let navigationController = UINavigationController(rootViewController: searchViewController)
+    // Create tab bar controller
+    let tabBarController = UITabBarController()
 
-    // Configure navigation controller
-    navigationController.navigationBar.prefersLargeTitles = true
-    navigationController.navigationBar.tintColor = .systemBlue
+    // Create Movies tab
+    let moviesViewModel = MovieSearchViewModel()
+    let moviesViewController = MovieSearchViewController(viewModel: moviesViewModel)
+    let moviesNavigationController = UINavigationController(
+      rootViewController: moviesViewController)
+    moviesNavigationController.navigationBar.prefersLargeTitles = true
+    moviesNavigationController.navigationBar.tintColor = .systemBlue
+
+    // Configure Movies tab
+    moviesNavigationController.tabBarItem = UITabBarItem(
+      title: "Movies",
+      image: UIImage(systemName: "film"),
+      selectedImage: UIImage(systemName: "film.fill")
+    )
+
+    // Create Favorites tab
+    let favoritesViewController = FavoritesViewController()
+    let favoritesNavigationController = UINavigationController(
+      rootViewController: favoritesViewController)
+    favoritesNavigationController.navigationBar.prefersLargeTitles = true
+    favoritesNavigationController.navigationBar.tintColor = .systemBlue
+
+    // Configure Favorites tab
+    favoritesNavigationController.tabBarItem = UITabBarItem(
+      title: "Favorites",
+      image: UIImage(systemName: "heart"),
+      selectedImage: UIImage(systemName: "heart.fill")
+    )
+
+    // Set tab bar view controllers
+    tabBarController.viewControllers = [moviesNavigationController, favoritesNavigationController]
+    tabBarController.tabBar.tintColor = .systemBlue
 
     // Set root view controller
-    window?.rootViewController = navigationController
+    window?.rootViewController = tabBarController
     window?.makeKeyAndVisible()
   }
 

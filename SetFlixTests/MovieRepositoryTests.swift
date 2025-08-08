@@ -10,93 +10,92 @@ import XCTest
 @testable import SetFlix
 
 class MovieRepositoryTests: XCTestCase {
-
   var repository: MovieRepository!
   var mockAPIService: MockMovieAPIService!
-  var mockCoreDataManager: MockCoreDataManager!
-  var mockNetworkReachability: MockNetworkReachabilityService!
+  var mockCacheManager: MockCacheManager!
+  var mockNetworkService: MockNetworkReachabilityService!
 
-  override func setUpWithError() throws {
+  override func setUp() {
     super.setUp()
-
     mockAPIService = MockMovieAPIService()
-    mockCoreDataManager = MockCoreDataManager()
-    mockNetworkReachability = MockNetworkReachabilityService()
-
+    mockCacheManager = MockCacheManager()
+    mockNetworkService = MockNetworkReachabilityService()
     repository = MovieRepositoryImpl(
       apiService: mockAPIService,
-      coreDataManager: mockCoreDataManager,
-      networkReachability: mockNetworkReachability
+      networkReachability: mockNetworkService
     )
   }
 
-  override func tearDownWithError() throws {
+  override func tearDown() {
     repository = nil
     mockAPIService = nil
-    mockCoreDataManager = nil
-    mockNetworkReachability = nil
+    mockCacheManager = nil
+    mockNetworkService = nil
     super.tearDown()
   }
 
   // MARK: - Search Movies Tests
 
-  func testSearchMoviesWithCache() async throws {
+  func testSearchMoviesSuccess() async throws {
     // Given
-    let cachedMovies = [
-      Movie(
-        id: 1, title: "Cached Movie", releaseDate: "2023-01-01", overview: "Overview",
-        posterPath: "/cached.jpg")
+    let expectedMovies = [
+      Movie(id: 1, title: "Test Movie 1", releaseDate: "2025-01-01", posterPath: "/test1.jpg"),
+      Movie(id: 2, title: "Test Movie 2", releaseDate: "2025-01-02", posterPath: "/test2.jpg"),
     ]
-    mockCoreDataManager.cachedMovies = cachedMovies
-    mockNetworkReachability.isConnected = false
+    let expectedResponse = MovieSearchResponse(
+      page: 1,
+      results: expectedMovies,
+      totalPages: 1,
+      totalResults: 2
+    )
+    mockAPIService.mockSearchResponse = expectedResponse
+    mockNetworkService.isConnected = true
 
     // When
     let result = try await repository.searchMovies(query: "test", page: 1)
 
     // Then
-    XCTAssertEqual(result.results.count, 1)
-    XCTAssertEqual(result.results.first?.title, "Cached Movie")
-    XCTAssertFalse(mockAPIService.searchMoviesCalled)
+    XCTAssertEqual(result.page, 1)
+    XCTAssertEqual(result.results.count, 2)
+    XCTAssertEqual(result.results[0].title, "Test Movie 1")
+    XCTAssertEqual(result.results[1].title, "Test Movie 2")
   }
 
-  func testSearchMoviesWithAPI() async throws {
+  func testSearchMoviesOffline() async throws {
     // Given
-    let apiMovies = [
-      Movie(
-        id: 2, title: "API Movie", releaseDate: "2023-01-02", overview: "API Overview",
-        posterPath: "/api.jpg")
+    mockNetworkService.isConnected = false
+    let cachedMovies = [
+      Movie(id: 3, title: "Cached Movie", releaseDate: "2025-01-03", posterPath: "/cached.jpg")
     ]
-    mockAPIService.searchResponse = MovieSearchResponse(
+    let cachedResponse = MovieSearchResponse(
       page: 1,
-      results: apiMovies,
+      results: cachedMovies,
       totalPages: 1,
       totalResults: 1
     )
-    mockNetworkReachability.isConnected = true
+    mockCacheManager.mockCachedSearchResults = cachedResponse
 
     // When
     let result = try await repository.searchMovies(query: "test", page: 1)
 
     // Then
+    XCTAssertEqual(result.page, 1)
     XCTAssertEqual(result.results.count, 1)
-    XCTAssertEqual(result.results.first?.title, "API Movie")
-    XCTAssertTrue(mockAPIService.searchMoviesCalled)
-    XCTAssertTrue(mockCoreDataManager.savePageCalled)
+    XCTAssertEqual(result.results[0].title, "Cached Movie")
   }
 
-  func testSearchMoviesNoNetwork() async {
+  func testSearchMoviesError() async {
     // Given
-    mockNetworkReachability.isConnected = false
-    mockCoreDataManager.cachedMovies = nil
+    mockAPIService.shouldThrowError = true
+    mockAPIService.mockError = NetworkError.invalidResponse
+    mockNetworkService.isConnected = true
 
     // When & Then
     do {
       _ = try await repository.searchMovies(query: "test", page: 1)
-      XCTFail("Expected network error")
-    } catch let error as NetworkError {
-      XCTAssertEqual(error, .noInternetConnection)
+      XCTFail("Expected error to be thrown")
     } catch {
-      XCTFail("Expected NetworkError.noInternetConnection")
+      XCTAssertTrue(error is NetworkError)
     }
   }
 
@@ -104,15 +103,15 @@ class MovieRepositoryTests: XCTestCase {
 
   func testGetMovieDetailsSuccess() async throws {
     // Given
-    let movieDetail = MovieDetail(
+    let expectedDetail = MovieDetail(
       id: 1,
       title: "Test Movie",
-      releaseDate: "2023-01-01",
+      releaseDate: "2025-01-01",
       overview: "Test overview",
       posterPath: "/test.jpg"
     )
-    mockAPIService.movieDetail = movieDetail
-    mockNetworkReachability.isConnected = true
+    mockAPIService.mockMovieDetail = expectedDetail
+    mockNetworkService.isConnected = true
 
     // When
     let result = try await repository.getMovieDetails(id: 1)
@@ -120,181 +119,380 @@ class MovieRepositoryTests: XCTestCase {
     // Then
     XCTAssertEqual(result.id, 1)
     XCTAssertEqual(result.title, "Test Movie")
-    XCTAssertTrue(mockAPIService.getMovieDetailsCalled)
-    XCTAssertTrue(mockCoreDataManager.saveMovieCalled)
+    XCTAssertEqual(result.overview, "Test overview")
   }
 
-  func testGetMovieDetailsNoNetwork() async {
+  func testGetMovieDetailsOffline() async throws {
     // Given
-    mockNetworkReachability.isConnected = false
+    mockNetworkService.isConnected = false
+    let cachedDetail = MovieDetail(
+      id: 1,
+      title: "Cached Movie",
+      releaseDate: "2025-01-01",
+      overview: "Cached overview",
+      posterPath: "/cached.jpg"
+    )
+    mockCacheManager.mockCachedMovieDetail = cachedDetail
 
-    // When & Then
-    do {
-      _ = try await repository.getMovieDetails(id: 1)
-      XCTFail("Expected network error")
-    } catch let error as NetworkError {
-      XCTAssertEqual(error, .noInternetConnection)
-    } catch {
-      XCTFail("Expected NetworkError.noInternetConnection")
-    }
+    // When
+    let result = try await repository.getMovieDetails(id: 1)
+
+    // Then
+    XCTAssertEqual(result.id, 1)
+    XCTAssertEqual(result.title, "Cached Movie")
+    XCTAssertEqual(result.overview, "Cached overview")
+  }
+
+  // MARK: - Get Popular Movies Tests
+
+  func testGetPopularMoviesSuccess() async throws {
+    // Given
+    let expectedMovies = [
+      Movie(id: 1, title: "Popular Movie 1", releaseDate: "2025-01-01", posterPath: "/pop1.jpg"),
+      Movie(id: 2, title: "Popular Movie 2", releaseDate: "2025-01-02", posterPath: "/pop2.jpg"),
+    ]
+    let expectedResponse = MovieSearchResponse(
+      page: 1,
+      results: expectedMovies,
+      totalPages: 1,
+      totalResults: 2
+    )
+    mockAPIService.mockPopularResponse = expectedResponse
+    mockNetworkService.isConnected = true
+
+    // When
+    let result = try await repository.getPopularMovies(page: 1)
+
+    // Then
+    XCTAssertEqual(result.page, 1)
+    XCTAssertEqual(result.results.count, 2)
+    XCTAssertEqual(result.results[0].title, "Popular Movie 1")
+    XCTAssertEqual(result.results[1].title, "Popular Movie 2")
+  }
+
+  func testGetPopularMoviesOffline() async throws {
+    // Given
+    mockNetworkService.isConnected = false
+    let cachedMovies = [
+      Movie(id: 3, title: "Cached Popular", releaseDate: "2025-01-03", posterPath: "/cached.jpg")
+    ]
+    let cachedResponse = MovieSearchResponse(
+      page: 1,
+      results: cachedMovies,
+      totalPages: 1,
+      totalResults: 1
+    )
+    mockCacheManager.mockCachedPopularMovies = cachedResponse
+
+    // When
+    let result = try await repository.getPopularMovies(page: 1)
+
+    // Then
+    XCTAssertEqual(result.page, 1)
+    XCTAssertEqual(result.results.count, 1)
+    XCTAssertEqual(result.results[0].title, "Cached Popular")
+  }
+
+  // MARK: - Get Trending Movies Tests
+
+  func testGetTrendingMoviesSuccess() async throws {
+    // Given
+    let expectedMovies = [
+      Movie(id: 1, title: "Trending Movie 1", releaseDate: "2025-01-01", posterPath: "/trend1.jpg"),
+      Movie(id: 2, title: "Trending Movie 2", releaseDate: "2025-01-02", posterPath: "/trend2.jpg"),
+    ]
+    let expectedResponse = MovieSearchResponse(
+      page: 1,
+      results: expectedMovies,
+      totalPages: 1,
+      totalResults: 2
+    )
+    mockAPIService.mockTrendingResponse = expectedResponse
+    mockNetworkService.isConnected = true
+
+    // When
+    let result = try await repository.getTrendingMovies(page: 1)
+
+    // Then
+    XCTAssertEqual(result.page, 1)
+    XCTAssertEqual(result.results.count, 2)
+    XCTAssertEqual(result.results[0].title, "Trending Movie 1")
+    XCTAssertEqual(result.results[1].title, "Trending Movie 2")
+  }
+
+  // MARK: - Get Movie Changes Tests
+
+  func testGetMovieChangesSuccess() async throws {
+    // Given
+    let expectedChanges = [
+      MovieChange(id: 1, adult: false),
+      MovieChange(id: 2, adult: true),
+    ]
+    let expectedResponse = MovieChangesResponse(
+      page: 1,
+      results: expectedChanges,
+      totalPages: 1,
+      totalResults: 2
+    )
+    mockAPIService.mockChangesResponse = expectedResponse
+    mockNetworkService.isConnected = true
+
+    // When
+    let result = try await repository.getMovieChanges(
+      startDate: "2025-01-01", endDate: "2025-01-31", page: 1)
+
+    // Then
+    XCTAssertEqual(result.page, 1)
+    XCTAssertEqual(result.results.count, 2)
+    XCTAssertEqual(result.results[0].id, 1)
+    XCTAssertEqual(result.results[1].id, 2)
   }
 
   // MARK: - Favorites Tests
 
-  func testSaveToFavorites() async throws {
-    // Given
-    let movie = Movie(
-      id: 1, title: "Favorite Movie", releaseDate: "2023-01-01", overview: "Overview",
-      posterPath: "/favorite.jpg")
-
-    // When
-    try await repository.saveToFavorites(movie)
-
-    // Then
-    XCTAssertTrue(mockCoreDataManager.saveMovieCalled)
-    XCTAssertEqual(mockCoreDataManager.lastSavedMovie?.id, 1)
-    XCTAssertEqual(mockCoreDataManager.lastIsFavorite, true)
-  }
-
   func testGetFavorites() async throws {
     // Given
-    let favoriteMovies = [
+    let expectedFavorites = [
       Movie(
-        id: 1, title: "Favorite 1", releaseDate: "2023-01-01", overview: "Overview 1",
-        posterPath: "/1.jpg"),
+        id: 1, title: "Favorite 1", releaseDate: "2025-01-01", posterPath: "/fav1.jpg",
+        isFavorite: true),
       Movie(
-        id: 2, title: "Favorite 2", releaseDate: "2023-01-02", overview: "Overview 2",
-        posterPath: "/2.jpg"),
+        id: 2, title: "Favorite 2", releaseDate: "2025-01-02", posterPath: "/fav2.jpg",
+        isFavorite: true),
     ]
-    mockCoreDataManager.favoriteMovies = favoriteMovies
+    mockCacheManager.mockFavorites = expectedFavorites
 
     // When
     let result = try await repository.getFavorites()
 
     // Then
     XCTAssertEqual(result.count, 2)
-    XCTAssertEqual(result.first?.title, "Favorite 1")
-    XCTAssertEqual(result.last?.title, "Favorite 2")
+    XCTAssertEqual(result[0].title, "Favorite 1")
+    XCTAssertEqual(result[1].title, "Favorite 2")
   }
 
   func testToggleFavorite() async throws {
     // Given
-    mockCoreDataManager.toggleFavoriteResult = true
+    mockCacheManager.mockToggleResult = true
 
     // When
     let result = try await repository.toggleFavorite(1)
 
     // Then
     XCTAssertTrue(result)
-    XCTAssertEqual(mockCoreDataManager.lastToggledMovieId, 1)
   }
 
   func testIsFavorite() async throws {
     // Given
-    mockCoreDataManager.isFavoriteResult = true
+    mockCacheManager.mockIsFavorite = true
 
     // When
     let result = try await repository.isFavorite(1)
 
     // Then
     XCTAssertTrue(result)
-    XCTAssertEqual(mockCoreDataManager.lastCheckedMovieId, 1)
+  }
+
+  // MARK: - Network Availability Tests
+
+  func testIsNetworkAvailable() {
+    // Given
+    mockNetworkService.isConnected = true
+
+    // When
+    let result = repository.isNetworkAvailable()
+
+    // Then
+    XCTAssertTrue(result)
+  }
+
+  func testIsNetworkUnavailable() {
+    // Given
+    mockNetworkService.isConnected = false
+
+    // When
+    let result = repository.isNetworkAvailable()
+
+    // Then
+    XCTAssertFalse(result)
   }
 }
 
-// MARK: - Mock Classes
+// MARK: - Mock Objects
 
 class MockMovieAPIService: MovieAPIService {
-  var searchMoviesCalled = false
-  var getMovieDetailsCalled = false
-  var searchResponse: MovieSearchResponse?
-  var movieDetail: MovieDetail?
+  var mockSearchResponse: MovieSearchResponse?
+  var mockMovieDetail: MovieDetail?
+  var mockPopularResponse: MovieSearchResponse?
+  var mockTrendingResponse: MovieSearchResponse?
+  var mockChangesResponse: MovieChangesResponse?
+  var shouldThrowError = false
+  var mockError: Error = NetworkError.invalidResponse
 
   func searchMovies(query: String, page: Int) async throws -> MovieSearchResponse {
-    searchMoviesCalled = true
-    guard let response = searchResponse else {
-      throw NetworkError.unknown
+    if shouldThrowError {
+      throw mockError
     }
-    return response
+    return mockSearchResponse
+      ?? MovieSearchResponse(
+        page: page,
+        results: [],
+        totalPages: 1,
+        totalResults: 0
+      )
   }
 
   func getMovieDetails(id: Int) async throws -> MovieDetail {
-    getMovieDetailsCalled = true
-    guard let detail = movieDetail else {
-      throw NetworkError.unknown
+    if shouldThrowError {
+      throw mockError
     }
-    return detail
+    return mockMovieDetail
+      ?? MovieDetail(
+        id: id,
+        title: "Mock Movie",
+        releaseDate: "2025-01-01",
+        overview: "Mock overview",
+        posterPath: "/mock.jpg"
+      )
   }
 
-}
-
-class MockCoreDataManager: CoreDataManager {
-  var cachedMovies: [Movie]?
-  var favoriteMovies: [Movie] = []
-  var savePageCalled = false
-  var saveMovieCalled = false
-  var toggleFavoriteCalled = false
-  var lastSavedMovie: Movie?
-  var lastIsFavorite: Bool = false
-  var lastToggledMovieId: Int = 0
-  var lastCheckedMovieId: Int = 0
-  var toggleFavoriteResult: Bool = false
-  var isFavoriteResult: Bool = false
-
-  override func getCachedMovies(for query: String, pageNumber: Int) -> [MovieEntity]? {
-    return cachedMovies?.compactMap { movie in
-      let entity = MovieEntity(context: context)
-      entity.id = Int64(movie.id)
-      entity.title = movie.title
-      entity.overview = movie.overview
-      entity.posterURL = movie.posterURL
-      entity.releaseDate = Date()
-      return entity
+  func getPopularMovies(page: Int) async throws -> MovieSearchResponse {
+    if shouldThrowError {
+      throw mockError
     }
+    return mockPopularResponse
+      ?? MovieSearchResponse(
+        page: page,
+        results: [],
+        totalPages: 1,
+        totalResults: 0
+      )
   }
 
-  override func savePage(query: String, pageNumber: Int, movies: [Movie]) {
-    savePageCalled = true
-  }
-
-  override func saveMovie(_ movie: Movie, isFavorite: Bool = false) {
-    saveMovieCalled = true
-    lastSavedMovie = movie
-    lastIsFavorite = isFavorite
-  }
-
-  override func getFavoriteMovies() -> [MovieEntity] {
-    return favoriteMovies.compactMap { movie in
-      let entity = MovieEntity(context: context)
-      entity.id = Int64(movie.id)
-      entity.title = movie.title
-      entity.overview = movie.overview
-      entity.posterURL = movie.posterURL
-      entity.releaseDate = Date()
-      entity.isFavorite = true
-      return entity
+  func getTrendingMovies(page: Int) async throws -> MovieSearchResponse {
+    if shouldThrowError {
+      throw mockError
     }
+    return mockTrendingResponse
+      ?? MovieSearchResponse(
+        page: page,
+        results: [],
+        totalPages: 1,
+        totalResults: 0
+      )
   }
 
-  override func toggleFavorite(for movieId: Int) -> Bool {
-    toggleFavoriteCalled = true
-    lastToggledMovieId = movieId
-    return toggleFavoriteResult
-  }
-
-  override func getMovie(by id: Int) -> MovieEntity? {
-    lastCheckedMovieId = id
-    let entity = MovieEntity(context: context)
-    entity.id = Int64(id)
-    entity.isFavorite = isFavoriteResult
-    return entity
+  func getMovieChanges(startDate: String, endDate: String, page: Int) async throws
+    -> MovieChangesResponse
+  {
+    if shouldThrowError {
+      throw mockError
+    }
+    return mockChangesResponse
+      ?? MovieChangesResponse(
+        page: page,
+        results: [],
+        totalPages: 1,
+        totalResults: 0
+      )
   }
 }
 
-class MockNetworkReachabilityService: NetworkReachabilityService {
+class MockCacheManager {
+  var mockCachedSearchResults: MovieSearchResponse?
+  var mockCachedMovieDetail: MovieDetail?
+  var mockCachedPopularMovies: MovieSearchResponse?
+  var mockFavorites: [Movie] = []
+  var mockToggleResult = false
+  var mockIsFavorite = false
+
+  func getCachedMovies() -> MovieSearchResponse {
+    return MovieSearchResponse(
+      page: 1,
+      results: [],
+      totalPages: 1,
+      totalResults: 0
+    )
+  }
+
+  func getCachedMovies(for query: String) -> MovieSearchResponse {
+    return mockCachedSearchResults
+      ?? MovieSearchResponse(
+        page: 1,
+        results: [],
+        totalPages: 1,
+        totalResults: 0
+      )
+  }
+
+  func saveSearchResults(_ response: MovieSearchResponse, for query: String) {
+    // Mock implementation
+  }
+
+  func savePopularMovies(_ response: MovieSearchResponse) {
+    // Mock implementation
+  }
+
+  func getCachedPopularMovies() -> MovieSearchResponse? {
+    return mockCachedPopularMovies
+      ?? MovieSearchResponse(
+        page: 1,
+        results: [],
+        totalPages: 1,
+        totalResults: 0
+      )
+  }
+
+  func saveMovieDetails(_ movieDetail: MovieDetail) {
+    // Mock implementation
+  }
+
+  func getCachedMovieDetails(id: Int) -> MovieDetail? {
+    return mockCachedMovieDetail
+  }
+
+  func clearOldCache(olderThan days: Int) {
+    // Mock implementation
+  }
+
+  func isNetworkAvailable() -> Bool {
+    return true
+  }
+
+  // MARK: - Favorites Methods
+  func getFavorites() async throws -> [Movie] {
+    return mockFavorites
+  }
+
+  func saveToFavorites(_ movie: Movie) async throws {
+    // Mock implementation
+  }
+
+  func removeFromFavorites(_ movieId: Int) async throws {
+    // Mock implementation
+  }
+
+  func toggleFavorite(_ movieId: Int) async throws -> Bool {
+    return mockToggleResult
+  }
+
+  func isFavorite(_ movieId: Int) async throws -> Bool {
+    return mockIsFavorite
+  }
+}
+
+class MockNetworkReachabilityService: NetworkReachabilityProtocol {
   var isConnected: Bool = true
 
-  override func isNetworkAvailable() -> Bool {
+  func isNetworkAvailable() -> Bool {
     return isConnected
+  }
+
+  func getConnectionTypeString() -> String {
+    return "WiFi"
+  }
+
+  func addConnectionObserver(_ observer: @escaping (Bool) -> Void) {
+    // Mock implementation
   }
 }

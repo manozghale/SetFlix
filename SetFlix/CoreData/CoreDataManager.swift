@@ -334,6 +334,25 @@ class CoreDataManager {
     return pageEntity
   }
 
+  func getPageEntity(query: String, pageNumber: Int) -> PageEntity? {
+    var result: PageEntity?
+
+    context.performAndWait {
+      let request: NSFetchRequest<PageEntity> = PageEntity.fetchRequest()
+      request.predicate = NSPredicate(format: "query == %@ AND pageNumber == %d", query, pageNumber)
+      request.fetchLimit = 1
+
+      do {
+        result = try context.fetch(request).first
+      } catch {
+        print("Error fetching page entity: \(error)")
+        result = nil
+      }
+    }
+
+    return result
+  }
+
   func getCachedMovies(for query: String, pageNumber: Int) -> [MovieEntity]? {
     var result: [MovieEntity]?
 
@@ -404,6 +423,29 @@ class CoreDataManager {
         saveBackgroundContext(backgroundContext)
       } catch {
         print("Error clearing expired cache: \(error)")
+      }
+    }
+  }
+
+  func clearAllData() {
+    let backgroundContext = self.backgroundContext
+
+    backgroundContext.performAndWait {
+      // Delete all movies
+      let movieRequest: NSFetchRequest<NSFetchRequestResult> = MovieEntity.fetchRequest()
+      let movieDeleteRequest = NSBatchDeleteRequest(fetchRequest: movieRequest)
+
+      // Delete all pages
+      let pageRequest: NSFetchRequest<NSFetchRequestResult> = PageEntity.fetchRequest()
+      let pageDeleteRequest = NSBatchDeleteRequest(fetchRequest: pageRequest)
+
+      do {
+        try backgroundContext.execute(movieDeleteRequest)
+        try backgroundContext.execute(pageDeleteRequest)
+        saveBackgroundContext(backgroundContext)
+        print("✅ Cleared all Core Data")
+      } catch {
+        print("❌ Error clearing Core Data: \(error)")
       }
     }
   }

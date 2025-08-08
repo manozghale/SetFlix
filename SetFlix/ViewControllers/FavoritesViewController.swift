@@ -147,7 +147,9 @@ extension FavoritesViewController: UITableViewDataSource {
   }
 
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-    let cell = tableView.dequeueReusableCell(withIdentifier: "MovieCell", for: indexPath) as! MovieTableViewCell
+    let cell =
+      tableView.dequeueReusableCell(withIdentifier: "MovieCell", for: indexPath)
+      as! MovieTableViewCell
     let movie = viewModel.movies[indexPath.row]
     cell.configure(with: movie)
     return cell
@@ -158,7 +160,7 @@ extension FavoritesViewController: UITableViewDataSource {
 extension FavoritesViewController: UITableViewDelegate {
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
-    
+
     let movie = viewModel.movies[indexPath.row]
     let detailViewController = MovieDetailViewController(movie: movie)
     navigationController?.pushViewController(detailViewController, animated: true)
@@ -167,4 +169,21 @@ extension FavoritesViewController: UITableViewDelegate {
   func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
     return 120
   }
-} 
+
+  // MARK: - Swipe to Delete
+  func tableView(
+    _ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle,
+    forRowAt indexPath: IndexPath
+  ) {
+    if editingStyle == .delete {
+      let movie = viewModel.movies[indexPath.row]
+      viewModel.removeFromFavorites(movie)
+    }
+  }
+
+  func tableView(
+    _ tableView: UITableView, titleForDeleteConfirmationButtonForRowAt indexPath: IndexPath
+  ) -> String? {
+    return "Remove"
+  }
+}

@@ -87,17 +87,17 @@ class MovieTableViewCell: UITableViewCell {
       posterImageView.widthAnchor.constraint(equalToConstant: 60),
       posterImageView.heightAnchor.constraint(equalToConstant: 80),
 
-      // Stack view constraints
-      stackView.leadingAnchor.constraint(equalTo: posterImageView.trailingAnchor, constant: 12),
-      stackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-      stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-
       // Favorite indicator constraints
       favoriteIndicator.trailingAnchor.constraint(
         equalTo: contentView.trailingAnchor, constant: -16),
       favoriteIndicator.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
       favoriteIndicator.widthAnchor.constraint(equalToConstant: 24),
       favoriteIndicator.heightAnchor.constraint(equalToConstant: 24),
+
+      // Stack view constraints - now properly positioned to avoid overlap with favorite indicator
+      stackView.leadingAnchor.constraint(equalTo: posterImageView.trailingAnchor, constant: 12),
+      stackView.trailingAnchor.constraint(equalTo: favoriteIndicator.leadingAnchor, constant: -8),
+      stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
       // Content view height
       contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 100),
