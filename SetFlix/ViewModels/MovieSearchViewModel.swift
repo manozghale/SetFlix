@@ -53,52 +53,103 @@ class MovieSearchViewModel: ObservableObject {
   /// Load initial popular movies
   func loadInitialData() {
     Task {
-      // Always try to load cached data first (offline-first approach)
-      await loadOfflineData()
-
-      // If online, try to refresh with fresh data in the background
+      // Check if we're online first
       if repository.isNetworkAvailable() {
-        await loadFreshDataInBackground()
+        // Online mode - try to load fresh data first
+        await loadFreshData()
+      } else {
+        // Offline mode - fallback to cached data
+        await loadOfflineData()
       }
     }
   }
 
-  /// Load fresh data in background without showing errors
-  private func loadFreshDataInBackground() async {
-    print("🔄 Starting background refresh...")
+  /// Load fresh data with loading state and error handling
+  private func loadFreshData() async {
+    print("🌐 Starting fresh data loading...")
     do {
+      isLoading = true
+      errorMessage = nil
+      isShowingCachedSearchResults = false
+
       if currentQuery.isEmpty {
-        print("🔄 Loading fresh popular movies...")
+        print("🌐 Loading fresh popular movies...")
         let response = try await repository.getPopularMovies(page: 1)
         if !Task.isCancelled {
-          // Preserve favorite status when refreshing
-          print("🔄 Preserving favorite status for \(response.results.count) popular movies...")
           let updatedMovies = await preserveFavoriteStatus(for: response.results)
           movies = updatedMovies
           filteredMovies = updatedMovies
           currentPage = response.page
           hasMorePages = (response.totalPages ?? 1) > response.page
-          isShowingCachedSearchResults = false
-          print("✅ Background refresh completed for popular movies")
+          isLoading = false
+          print("✅ Fresh popular movies loaded successfully")
         }
       } else {
-        print("🔄 Loading fresh search results for '\(currentQuery)'...")
+        print("🌐 Loading fresh search results for '\(currentQuery)'...")
         let response = try await repository.searchMovies(query: currentQuery, page: 1)
         if !Task.isCancelled {
-          // Preserve favorite status when refreshing search results
-          print("🔄 Preserving favorite status for \(response.results.count) search results...")
           let updatedMovies = await preserveFavoriteStatus(for: response.results)
           filteredMovies = updatedMovies
           saveLastSearchResults(updatedMovies)
           currentPage = response.page
           hasMorePages = (response.totalPages ?? 1) > response.page
-          isShowingCachedSearchResults = false
-          print("✅ Background refresh completed for search results")
+          isLoading = false
+          print("✅ Fresh search results loaded successfully")
         }
       }
     } catch {
-      // Silently fail - don't show error popup for background refresh
-      print("❌ Background refresh failed: \(error.localizedDescription)")
+      if !Task.isCancelled {
+        print("❌ Fresh data loading failed: \(error.localizedDescription)")
+        isLoading = false
+        errorMessage = "Failed to load data: \(error.localizedDescription)"
+
+        // Fallback to cached data if fresh data fails
+        print("📱 Falling back to cached data...")
+        await loadOfflineData()
+      }
+    }
+  }
+
+  /// Load cached data as fallback (offline mode or when fresh data fails)
+  private func loadOfflineData() async {
+    print("📱 Loading cached data as fallback...")
+
+    // First, try to load the last search results from UserDefaults
+    if let lastQuery = getLastSearchQuery(), !lastQuery.isEmpty {
+      print("📱 Found last search query: '\(lastQuery)'")
+      let cachedSearchResults = getLastSearchResults()
+      print("📱 Cached search results count: \(cachedSearchResults.count)")
+
+      if !cachedSearchResults.isEmpty {
+        let updatedMovies = await preserveFavoriteStatus(for: cachedSearchResults)
+        movies = updatedMovies
+        filteredMovies = updatedMovies
+        currentQuery = lastQuery
+        isSearching = true
+        isShowingCachedSearchResults = true
+        isLoading = false
+        print("📱 Loaded \(updatedMovies.count) cached search results for '\(lastQuery)'")
+        return
+      }
+    }
+
+    // If no search results available, fall back to popular movies from Core Data
+    print("📱 Falling back to cached popular movies...")
+    let cachedResponse = repository.getCachedPopularMovies()
+    print("📱 Cached popular movies count: \(cachedResponse.results.count)")
+
+    if !cachedResponse.results.isEmpty {
+      let updatedMovies = await preserveFavoriteStatus(for: cachedResponse.results)
+      movies = updatedMovies
+      filteredMovies = updatedMovies
+      currentQuery = ""
+      isSearching = false
+      isShowingCachedSearchResults = false
+      isLoading = false
+      print("📱 Loaded \(updatedMovies.count) cached popular movies")
+    } else {
+      isLoading = false
+      print("📱 No cached data available")
     }
   }
 
@@ -138,53 +189,6 @@ class MovieSearchViewModel: ObservableObject {
       "✅ Favorite status preservation completed: \(preservedCount) favorites preserved out of \(freshMovies.count) movies"
     )
     return updatedMovies
-  }
-
-  private func loadOfflineData() async {
-    print("📱 Starting offline data loading...")
-
-    // First, try to load the last search results from UserDefaults
-    if let lastQuery = getLastSearchQuery(), !lastQuery.isEmpty {
-      print("📱 Found last search query: '\(lastQuery)'")
-      let cachedSearchResults = getLastSearchResults()
-      print("📱 Cached search results count: \(cachedSearchResults.count)")
-
-      if !cachedSearchResults.isEmpty {
-        // Preserve favorite status for cached search results
-        let updatedMovies = await preserveFavoriteStatus(for: cachedSearchResults)
-        movies = updatedMovies
-        filteredMovies = updatedMovies
-        currentQuery = lastQuery
-        isSearching = true
-        isShowingCachedSearchResults = true
-        print(
-          "📱 Loaded \(updatedMovies.count) search results for '\(lastQuery)' from UserDefaults (offline mode)"
-        )
-        return
-      } else {
-        print("📱 No cached search results found for '\(lastQuery)' in UserDefaults")
-      }
-    } else {
-      print("📱 No last search query found")
-    }
-
-    // If no search results available, fall back to popular movies from Core Data
-    print("📱 Falling back to popular movies from Core Data...")
-    let cachedResponse = repository.getCachedPopularMovies()
-    print("📱 Cached popular movies count: \(cachedResponse.results.count)")
-
-    if !cachedResponse.results.isEmpty {
-      // Preserve favorite status for cached popular movies
-      let updatedMovies = await preserveFavoriteStatus(for: cachedResponse.results)
-      movies = updatedMovies
-      filteredMovies = updatedMovies
-      currentQuery = ""
-      isSearching = false
-      isShowingCachedSearchResults = false
-      print("📱 Loaded \(updatedMovies.count) popular movies from cache (offline mode)")
-    } else {
-      print("📱 No cached popular movies found")
-    }
   }
 
   /// Search movies with query
