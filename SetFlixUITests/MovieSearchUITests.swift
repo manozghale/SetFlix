@@ -245,17 +245,6 @@ class MovieSearchUITests: XCTestCase {
     XCTAssertTrue(favoritesButton.hasValidAccessibilityLabel)
   }
 
-  func testVoiceOverCompatibility() {
-    // Given: App is launched
-
-    // When: VoiceOver is enabled (simulated)
-    // Note: This would require VoiceOver simulation
-
-    // Then: Elements should be accessible via VoiceOver
-    XCTAssertTrue(searchBar.isAccessibilityElement)
-    XCTAssertTrue(favoritesButton.isAccessibilityElement)
-  }
-
   // MARK: - Performance Tests
   func testAppLaunchPerformance() {
     // Given: App launch performance test

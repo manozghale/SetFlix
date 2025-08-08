@@ -5,7 +5,7 @@ A modern iOS movie discovery application built with Swift, featuring MVVM archit
 ## 📱 Features
 
 - **Movie Search & Discovery**: Search for movies using TMDB API
-- **Offline-First Design**: Works seamlessly without internet connection
+- **Offline-Focused Design**: Works seamlessly without internet connection
 - **Favorites System**: Save and manage favorite movies
 - **Smart Caching**: Intelligent data caching for optimal performance
 - **Tab Bar Navigation**: Easy navigation between Movies and Favorites
@@ -197,5 +197,102 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/SetFlix-*
 ## 📁 Project Structure
 
 ```
-
+SetFlix/
+├── SetFlix/                          # Main app target
+│   ├── AppDelegate.swift             # App lifecycle management
+│   ├── SceneDelegate.swift           # Scene lifecycle and navigation setup
+│   ├── Info.plist                    # App configuration
+│   ├── Config.plist                  # API keys and configuration
+│   │
+│   ├── Models/                       # Data models
+│   │   ├── Movie.swift               # Movie data model
+│   │   ├── MovieDetail.swift         # Detailed movie information
+│   │   └── NetworkError.swift        # Network error types
+│   │
+│   ├── ViewModels/                   # MVVM ViewModels
+│   │   ├── MovieSearchViewModel.swift # Main search and list logic
+│   │   ├── MovieDetailViewModel.swift # Movie detail logic
+│   │   └── FavoritesViewModel.swift  # Favorites management
+│   │
+│   ├── ViewControllers/              # UI Controllers
+│   │   ├── MovieSearchViewController.swift # Main search screen
+│   │   ├── MovieDetailViewController.swift # Movie detail screen
+│   │   └── FavoritesViewController.swift   # Favorites screen
+│   │
+│   ├── Views/                        # Custom UI components
+│   │   ├── MovieTableViewCell.swift  # Movie list cell
+│   │   └── EmptyStateView.swift      # Empty state display
+│   │
+│   ├── Services/                     # Business logic and data layer
+│   │   ├── MovieAPIService.swift     # TMDB API integration
+│   │   ├── MovieRepository.swift     # Data access abstraction
+│   │   ├── MovieRepositoryFactory.swift # Repository factory
+│   │   ├── CacheManager.swift        # Data caching logic
+│   │   ├── ImageLoader.swift         # Image loading and caching
+│   │   ├── NetworkReachabilityService.swift # Network monitoring
+│   │   └── README.md                 # Service layer documentation
+│   │
+│   ├── CoreData/                     # Data persistence
+│   │   ├── CoreDataManager.swift     # Core Data operations
+│   │   └── SetFlix.xcdatamodeld/     # Data model schema
+│   │
+│   ├── Utilities/                    # Helper classes
+│   │   ├── ConfigurationManager.swift # App configuration
+│   │   └── Extensions/               # Swift extensions
+│   │
+│   ├── Assets.xcassets/              # App icons and images
+│   └── Base.lproj/                   # Localization files
+│       ├── Main.storyboard           # Main storyboard
+│       └── LaunchScreen.storyboard   # Launch screen
+│
+├── SetFlixTests/                     # Unit tests target
+│   ├── CoreDataManagerTests.swift    # Core Data testing
+│   ├── MovieRepositoryTests.swift    # Repository layer testing
+│   ├── MovieSearchViewModelTests.swift # ViewModel testing
+│   ├── NetworkLayerTests.swift       # Network layer testing
+│   └── SetFlixTests.swift            # Test configuration
+│
+├── SetFlixUITests/                   # UI tests target
+│   ├── MovieSearchUITests.swift      # UI interaction testing
+│   ├── SetFlixUITests.swift          # UI test configuration
+│   └── SetFlixUITestsLaunchTests.swift # Launch testing
+│
+├── SetFlix.xcodeproj/                # Xcode project file
+├── README.md                         # Project documentation
+└── DEVELOPMENT_WRITEUP.md            # Development decisions and challenges
 ```
+
+### Architecture Overview
+
+#### **MVVM Pattern**
+
+- **Models**: `Movie`, `MovieDetail`, `NetworkError`
+- **ViewModels**: Business logic and data binding
+- **Views**: UI Controllers and custom components
+
+#### **Repository Pattern**
+
+- **Repository Interface**: `MovieRepository` protocol
+- **Implementation**: `MovieRepositoryImpl` with API and cache
+- **Factory**: `MovieRepositoryFactory` for dependency injection
+
+#### **Service Layer**
+
+- **API Service**: TMDB API integration
+- **Cache Manager**: Data persistence and retrieval
+- **Image Loader**: Image caching and loading
+- **Network Monitor**: Connectivity status
+
+#### **Data Layer**
+
+- **Core Data**: Local persistence for favorites and cache
+- **UserDefaults**: Lightweight data storage
+- **File System**: Image cache storage
+
+### Key Design Patterns
+
+1. **Dependency Injection**: Services injected via protocols
+2. **Factory Pattern**: Repository creation and configuration
+3. **Observer Pattern**: Combine framework for reactive updates
+4. **Singleton Pattern**: Shared services (CoreDataManager, ImageLoader)
+5. **Protocol-Oriented**: Testable and maintainable interfaces
