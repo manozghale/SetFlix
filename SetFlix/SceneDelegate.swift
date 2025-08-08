@@ -24,12 +24,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     let tabBarController = UITabBarController()
 
     // Create Movies tab
-    let moviesViewModel = MovieSearchViewModel()
+    let repository = MovieRepositoryFactory.createRepository()
+    let moviesViewModel = MovieSearchViewModel(repository: repository)
     let moviesViewController = MovieSearchViewController(viewModel: moviesViewModel)
     let moviesNavigationController = UINavigationController(
       rootViewController: moviesViewController)
     moviesNavigationController.navigationBar.prefersLargeTitles = true
-    moviesNavigationController.navigationBar.tintColor = .systemBlue
+    moviesNavigationController.navigationBar.tintColor = UIColor.systemBlue
 
     // Configure Movies tab
     moviesNavigationController.tabBarItem = UITabBarItem(
@@ -43,7 +44,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     let favoritesNavigationController = UINavigationController(
       rootViewController: favoritesViewController)
     favoritesNavigationController.navigationBar.prefersLargeTitles = true
-    favoritesNavigationController.navigationBar.tintColor = .systemBlue
+    favoritesNavigationController.navigationBar.tintColor = UIColor.systemBlue
 
     // Configure Favorites tab
     favoritesNavigationController.tabBarItem = UITabBarItem(
@@ -54,7 +55,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     // Set tab bar view controllers
     tabBarController.viewControllers = [moviesNavigationController, favoritesNavigationController]
-    tabBarController.tabBar.tintColor = .systemBlue
+    tabBarController.tabBar.tintColor = UIColor.systemBlue
 
     // Set root view controller
     window?.rootViewController = tabBarController

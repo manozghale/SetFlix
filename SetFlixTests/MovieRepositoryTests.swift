@@ -2,11 +2,11 @@
 //  MovieRepositoryTests.swift
 //  SetFlixTests
 //
-//  Created by Manoj on 06/08/2025.
+//  Created by Manoj on 07/08/2025.
 //
 
 import XCTest
-
+import Combine
 @testable import SetFlix
 
 class MovieRepositoryTests: XCTestCase {
@@ -483,6 +483,7 @@ class MockCacheManager {
 
 class MockNetworkReachabilityService: NetworkReachabilityProtocol {
   var isConnected: Bool = true
+  private let isConnectedSubject = CurrentValueSubject<Bool, Never>(true)
 
   func isNetworkAvailable() -> Bool {
     return isConnected
@@ -493,6 +494,17 @@ class MockNetworkReachabilityService: NetworkReachabilityProtocol {
   }
 
   func addConnectionObserver(_ observer: @escaping (Bool) -> Void) {
-    // Mock implementation
+    // Mock implementation - immediately call with current state
+    observer(isConnected)
+  }
+
+  var isConnectedPublisher: AnyPublisher<Bool, Never> {
+    return isConnectedSubject.eraseToAnyPublisher()
+  }
+
+  // Helper method for tests to simulate network state changes
+  func simulateNetworkChange(isConnected: Bool) {
+    self.isConnected = isConnected
+    isConnectedSubject.send(isConnected)
   }
 }

@@ -5,12 +5,14 @@
 //  Created by Manoj on 07/08/2025.
 //
 
+import Combine
 import Foundation
 import Network
 
 // MARK: - Network Reachability Protocol
 protocol NetworkReachabilityProtocol {
   var isConnected: Bool { get }
+  var isConnectedPublisher: AnyPublisher<Bool, Never> { get }
   func isNetworkAvailable() -> Bool
   func getConnectionTypeString() -> String
   func addConnectionObserver(_ observer: @escaping (Bool) -> Void)
@@ -21,6 +23,8 @@ class NetworkReachabilityService: NetworkReachabilityProtocol {
 
   private let monitor = NWPathMonitor()
   private let queue = DispatchQueue(label: "com.setflix.networkmonitor")
+  private var observers: [UUID: (Bool) -> Void] = [:]
+  private let isConnectedSubject = CurrentValueSubject<Bool, Never>(false)
 
   @Published private(set) var isConnected = false
   @Published private(set) var connectionType: ConnectionType = .unknown
@@ -45,8 +49,21 @@ class NetworkReachabilityService: NetworkReachabilityProtocol {
   private func setupNetworkMonitoring() {
     monitor.pathUpdateHandler = { [weak self] path in
       DispatchQueue.main.async {
-        self?.isConnected = path.status == .satisfied
-        self?.connectionType = self?.getConnectionType(from: path) ?? .unknown
+        let isConnected = path.status == .satisfied
+        let connectionType = self?.getConnectionType(from: path) ?? .unknown
+
+        self?.isConnected = isConnected
+        self?.connectionType = connectionType
+        self?.isConnectedSubject.send(isConnected)
+
+        // Notify all observers
+        self?.observers.values.forEach { observer in
+          observer(isConnected)
+        }
+
+        print(
+          "🌐 Network state changed: \(isConnected ? "Connected" : "Disconnected") (\(connectionType))"
+        )
       }
     }
 
@@ -85,7 +102,21 @@ class NetworkReachabilityService: NetworkReachabilityProtocol {
   }
 
   func addConnectionObserver(_ observer: @escaping (Bool) -> Void) {
-    // This could be expanded to use a proper observer pattern
-    // For now, we'll use the @Published property
+    let id = UUID()
+    observers[id] = observer
+
+    // Immediately call with current state
+    observer(isConnected)
+
+    print("👁️ Added network observer (ID: \(id))")
+  }
+
+  func removeConnectionObserver(id: UUID) {
+    observers.removeValue(forKey: id)
+    print("👁️ Removed network observer (ID: \(id))")
+  }
+
+  var isConnectedPublisher: AnyPublisher<Bool, Never> {
+    return isConnectedSubject.eraseToAnyPublisher()
   }
 }

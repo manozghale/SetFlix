@@ -8,11 +8,22 @@
         <attribute name="posterURL" optional="YES" attributeType="String"/>
         <attribute name="isFavorite" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <relationship name="pages" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PageEntity" inverseName="movies" inverseEntity="PageEntity"/>
+        <relationship name="orderedMovies" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="OrderedMovieEntity" inverseName="movie" inverseEntity="OrderedMovieEntity"/>
+    </entity>
+    <entity name="OrderedMovieEntity" representedClassName="OrderedMovieEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="order" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="movie" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="MovieEntity" inverseName="orderedMovies" inverseEntity="MovieEntity"/>
+        <relationship name="searchResult" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="SearchResultEntity" inverseName="orderedMovies" inverseEntity="SearchResultEntity"/>
     </entity>
     <entity name="PageEntity" representedClassName="PageEntity" syncable="YES" codeGenerationType="class">
         <attribute name="query" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="pageNumber" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <relationship name="movies" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="MovieEntity" inverseName="pages" inverseEntity="MovieEntity"/>
+    </entity>
+    <entity name="SearchResultEntity" representedClassName="SearchResultEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="query" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="orderedMovies" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="OrderedMovieEntity" inverseName="searchResult" inverseEntity="OrderedMovieEntity"/>
     </entity>
 </model> 

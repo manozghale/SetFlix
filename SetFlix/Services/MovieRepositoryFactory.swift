@@ -5,6 +5,7 @@
 //  Created by Manoj on 06/08/2025.
 //
 
+import Combine
 import Foundation
 
 class MovieRepositoryFactory {
@@ -61,6 +62,8 @@ class MockMovieRepository: MovieRepository {
       posterPath: "/mock-poster-3.jpg"
     ),
   ]
+
+  private let networkStateSubject = CurrentValueSubject<Bool, Never>(true)
 
   // MARK: - API Methods
   func searchMovies(query: String, page: Int) async throws -> MovieSearchResponse {
@@ -187,6 +190,10 @@ class MockMovieRepository: MovieRepository {
   func isNetworkAvailable() -> Bool {
     // Mock implementation - always return true for testing
     return true
+  }
+
+  var networkStatePublisher: AnyPublisher<Bool, Never> {
+    return networkStateSubject.eraseToAnyPublisher()
   }
 
   // MARK: - Favorites Methods

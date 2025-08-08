@@ -5,6 +5,7 @@
 //  Created by Manoj on 06/08/2025.
 //
 
+import Combine
 import Foundation
 
 protocol MovieRepository {
@@ -32,6 +33,9 @@ protocol MovieRepository {
   func saveMovieDetails(_ movieDetail: MovieDetail)
   func clearOldCache(olderThan days: Int)
   func isNetworkAvailable() -> Bool
+
+  // Network state publisher
+  var networkStatePublisher: AnyPublisher<Bool, Never> { get }
 }
 
 // MARK: - Repository Implementation
@@ -39,10 +43,21 @@ class MovieRepositoryImpl: MovieRepository {
   private let apiService: MovieAPIService
   private let networkReachability: NetworkReachabilityProtocol
   private let cacheManager = CacheManager.shared
+  private var cancellables = Set<AnyCancellable>()
 
   init(apiService: MovieAPIService, networkReachability: NetworkReachabilityProtocol) {
     self.apiService = apiService
     self.networkReachability = networkReachability
+    setupNetworkMonitoring()
+  }
+
+  private func setupNetworkMonitoring() {
+    networkReachability.isConnectedPublisher
+      .sink { [weak self] isConnected in
+        print("📱 Repository detected network change: \(isConnected ? "Online" : "Offline")")
+        // Repository can react to network changes here if needed
+      }
+      .store(in: &cancellables)
   }
 
   // MARK: - Search Movies (Online-first with offline fallback)
@@ -249,5 +264,9 @@ class MovieRepositoryImpl: MovieRepository {
 
   func isNetworkAvailable() -> Bool {
     return networkReachability.isConnected
+  }
+
+  var networkStatePublisher: AnyPublisher<Bool, Never> {
+    return networkReachability.isConnectedPublisher
   }
 }

@@ -8,10 +8,32 @@
 import Combine
 import UIKit
 
-class MovieSearchViewController: UIViewController {
+class MovieSearchViewController: UIViewController, UISearchBarDelegate {
 
   // MARK: - UI Components
-  private let searchController = UISearchController(searchResultsController: nil)
+  private lazy var searchController: UISearchController = {
+    let controller = UISearchController(searchResultsController: nil)
+    controller.searchResultsUpdater = self
+    controller.obscuresBackgroundDuringPresentation = false
+    controller.searchBar.placeholder = "Search movies..."
+    controller.searchBar.tintColor = .systemBlue
+    controller.searchBar.delegate = self
+    controller.searchBar.isUserInteractionEnabled = true
+    controller.searchBar.autocorrectionType = .no
+    controller.searchBar.autocapitalizationType = .none
+    controller.searchBar.returnKeyType = .search
+    controller.searchBar.enablesReturnKeyAutomatically = false
+    controller.definesPresentationContext = true
+    
+    // Configure clear button
+    controller.searchBar.showsBookmarkButton = false
+    controller.searchBar.showsCancelButton = false
+    
+    // Ensure clear button is properly configured
+    controller.searchBar.searchTextField.clearButtonMode = .whileEditing
+    
+    return controller
+  }()
   private let tableView = UITableView()
   private let loadingIndicator = UIActivityIndicatorView(style: .large)
   private let emptyStateView = EmptyStateView()
@@ -46,6 +68,18 @@ class MovieSearchViewController: UIViewController {
     super.viewWillAppear(animated)
     // Refresh favorite status when returning from detail view
     viewModel.refreshFavoriteStatus()
+  }
+  
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    // Ensure search controller is properly configured after view appears
+    if searchController.searchBar.delegate == nil {
+      searchController.searchBar.delegate = self
+    }
+    // Ensure search controller is properly configured
+    if searchController.searchResultsUpdater == nil {
+      searchController.searchResultsUpdater = self
+    }
   }
 
   // MARK: - UI Setup
@@ -94,14 +128,16 @@ class MovieSearchViewController: UIViewController {
   }
 
   private func setupSearchController() {
-    searchController.searchResultsUpdater = self
-    searchController.obscuresBackgroundDuringPresentation = false
-    searchController.searchBar.placeholder = "Search movies..."
-    searchController.searchBar.tintColor = .systemBlue
-
     // Add search bar to navigation bar
     navigationItem.searchController = searchController
+    navigationItem.hidesSearchBarWhenScrolling = false
+    
+    // Set presentation context to prevent crashes
     definesPresentationContext = true
+    searchController.definesPresentationContext = true
+    
+    // Ensure search controller is properly configured
+    searchController.isActive = false
   }
 
   private func setupTableView() {
@@ -169,13 +205,21 @@ class MovieSearchViewController: UIViewController {
       }
       .store(in: &cancellables)
 
+    // Bind network status
+    viewModel.$isOnline
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] isOnline in
+        self?.updateNetworkStatus(isOnline: isOnline)
+      }
+      .store(in: &cancellables)
+
     // Add cache status indicator
     viewModel.$isLoading
-      .combineLatest(viewModel.$filteredMovies)
+      .combineLatest(viewModel.$filteredMovies, viewModel.$isOnline)
       .receive(on: DispatchQueue.main)
-      .sink { [weak self] isLoading, movies in
+      .sink { [weak self] isLoading, movies, isOnline in
         if !isLoading && !movies.isEmpty {
-          self?.showCacheIndicator()
+          self?.showCacheIndicator(isOnline: isOnline)
         }
       }
       .store(in: &cancellables)
@@ -203,14 +247,43 @@ class MovieSearchViewController: UIViewController {
     }
   }
 
+  private func updateNetworkStatus(isOnline: Bool) {
+    if isOnline {
+      // Remove offline indicator
+      navigationItem.titleView = nil
+      print("📱 UI: Network status updated - Online")
+    } else {
+      // Show offline indicator
+      let offlineLabel = UILabel()
+      offlineLabel.text = "📱 Offline Mode"
+      offlineLabel.textAlignment = .center
+      offlineLabel.backgroundColor = .systemYellow.withAlphaComponent(0.8)
+      offlineLabel.textColor = .black
+      offlineLabel.font = .systemFont(ofSize: 12)
+      offlineLabel.layer.cornerRadius = 4
+      offlineLabel.clipsToBounds = true
+      offlineLabel.sizeToFit()
+
+      // Add padding
+      offlineLabel.frame = CGRect(
+        x: 0, y: 0,
+        width: offlineLabel.frame.width + 16,
+        height: offlineLabel.frame.height + 8
+      )
+
+      navigationItem.titleView = offlineLabel
+      print("📱 UI: Network status updated - Offline")
+    }
+  }
+
   private func showError(_ message: String) {
     let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "OK", style: .default))
     present(alert, animated: true)
   }
 
-  private func showCacheIndicator() {
-    if !viewModel.isNetworkAvailable() {
+  private func showCacheIndicator(isOnline: Bool) {
+    if !isOnline {
       // Show offline indicator with specific message
       let offlineLabel = UILabel()
 
@@ -226,6 +299,14 @@ class MovieSearchViewController: UIViewController {
       offlineLabel.font = .systemFont(ofSize: 12)
       offlineLabel.layer.cornerRadius = 4
       offlineLabel.clipsToBounds = true
+      offlineLabel.sizeToFit()
+
+      // Add padding
+      offlineLabel.frame = CGRect(
+        x: 0, y: 0,
+        width: offlineLabel.frame.width + 16,
+        height: offlineLabel.frame.height + 8
+      )
 
       // Add to navigation bar
       navigationItem.titleView = offlineLabel
@@ -275,7 +356,7 @@ extension MovieSearchViewController: UITableViewDataSourcePrefetching {
 
     for indexPath in indexPaths {
       if indexPath.row >= thresholdIndex {
-        viewModel.loadMoreResults()
+        viewModel.loadMoreMovies()
         break
       }
     }
@@ -285,7 +366,81 @@ extension MovieSearchViewController: UITableViewDataSourcePrefetching {
 // MARK: - UISearchResultsUpdating
 extension MovieSearchViewController: UISearchResultsUpdating {
   func updateSearchResults(for searchController: UISearchController) {
-    guard let searchText = searchController.searchBar.text else { return }
+    // This method is called by UISearchController when search results need updating
+    // The actual search is handled by UISearchBarDelegate methods
+    // This method is kept for compatibility but the search logic is in searchBar(_:textDidChange:)
+  }
+}
+
+// MARK: - UISearchBarDelegate
+extension MovieSearchViewController {
+  func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+    // This ensures immediate search as user types
+    if searchText.isEmpty {
+      // Handle clear button action
+      handleSearchBarClear()
+    } else {
+      viewModel.searchMovies(query: searchText)
+    }
+  }
+  
+  func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+    // Handle search button tap
+    guard let searchText = searchBar.text else { return }
     viewModel.searchMovies(query: searchText)
+    searchController.dismiss(animated: true)
+  }
+  
+  func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+    // Clear search and show popular movies
+    searchBar.text = ""
+    searchBar.resignFirstResponder()
+    searchController.dismiss(animated: true)
+    viewModel.clearSearchState()
+  }
+  
+  func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+    // Show cancel button when editing begins
+    searchBar.showsCancelButton = true
+  }
+  
+  func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+    // Hide cancel button when editing ends
+    searchBar.showsCancelButton = false
+  }
+  
+  func searchBarShouldBeginEditing(_ searchBar: UISearchBar) -> Bool {
+    // Ensure search bar can begin editing
+    return true
+  }
+  
+  func searchBarShouldEndEditing(_ searchBar: UISearchBar) -> Bool {
+    // Allow search bar to end editing
+    return true
+  }
+  
+  func searchBar(_ searchBar: UISearchBar, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+    // Handle text changes including clear button
+    let currentText = searchBar.text ?? ""
+    guard let textRange = Range(range, in: currentText) else { return true }
+    
+    let updatedText = currentText.replacingCharacters(in: textRange, with: text)
+    
+    // If the text is being cleared (likely by clear button), handle it properly
+    if updatedText.isEmpty {
+      DispatchQueue.main.async {
+        self.handleSearchBarClear()
+      }
+    }
+    
+    return true
+  }
+  
+  // MARK: - Private Helper Methods
+  private func handleSearchBarClear() {
+    // Safely handle search bar clear action
+    DispatchQueue.main.async {
+      self.viewModel.clearSearchState()
+    }
   }
 }

@@ -1,0 +1,19 @@
+{
+	"name": "xcode build server",
+	"version": "0.2",
+	"bspVersion": "2.0",
+	"languages": [
+		"c",
+		"cpp",
+		"objective-c",
+		"objective-cpp",
+		"swift"
+	],
+	"argv": [
+		"/opt/homebrew/bin/xcode-build-server"
+	],
+	"workspace": "/Users/manojghale/Documents/Projects/Mobile Apps/SetFlix/SetFlix.xcodeproj/project.xcworkspace",
+	"build_root": "/Users/manojghale/Library/Developer/Xcode/DerivedData/SetFlix-gnogxgmhtpahozgwagwgxwlexzwq",
+	"scheme": "SetFlix",
+	"kind": "xcode"
+}

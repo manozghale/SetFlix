@@ -14,13 +14,13 @@ struct Movie: Codable, Identifiable, Equatable {
   let posterPath: String?
   var isFavorite: Bool
 
-  // Custom coding keys to handle snake_case from API
+  // Custom coding keys to handle snake_case from API and include isFavorite
   enum CodingKeys: String, CodingKey {
     case id
     case title
     case releaseDate
     case posterPath
-    // Note: isFavorite is not included in CodingKeys since it's not part of the API response
+    case isFavorite // ✅ Include isFavorite in coding keys
   }
 
   // Manual initializer for creating Movie objects programmatically
@@ -33,7 +33,7 @@ struct Movie: Codable, Identifiable, Equatable {
     self.isFavorite = isFavorite
   }
 
-  // Custom decoder to handle the fact that isFavorite is not in the API response
+  // Custom decoder to handle the fact that isFavorite might not be in the API response
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -55,8 +55,19 @@ struct Movie: Codable, Identifiable, Equatable {
       posterPath = nil
     }
 
-    // Default to false since this is not part of the API response
-    isFavorite = false
+    // Try to decode isFavorite, default to false if not present (for API responses)
+    isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+  }
+
+  // Custom encoder to ensure isFavorite is included
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    
+    try container.encode(id, forKey: .id)
+    try container.encode(title, forKey: .title)
+    try container.encodeIfPresent(releaseDate, forKey: .releaseDate)
+    try container.encodeIfPresent(posterPath, forKey: .posterPath)
+    try container.encode(isFavorite, forKey: .isFavorite) // ✅ Always encode isFavorite
   }
 
   // Computed property for poster URL
