@@ -143,7 +143,7 @@ class MovieSearchViewModelTests: XCTestCase {
     mockRepository.mockPopularMovies = moreMovies
 
     // When: Loading more results
-    viewModel.loadMoreResults()
+    viewModel.loadMoreMovies()
 
     // Then: Should append new movies
     XCTAssertEqual(viewModel.filteredMovies.count, 3)
@@ -156,7 +156,7 @@ class MovieSearchViewModelTests: XCTestCase {
     viewModel.hasMorePages = false
 
     // When: Loading more results
-    viewModel.loadMoreResults()
+    viewModel.loadMoreMovies()
 
     // Then: Should not load more
     XCTAssertEqual(viewModel.currentPage, 1)
@@ -204,7 +204,7 @@ class MovieSearchViewModelTests: XCTestCase {
     mockRepository.mockIsNetworkAvailable = true
 
     // When: Checking network availability
-    let isAvailable = viewModel.isNetworkAvailable()
+    let isAvailable = viewModel.isOnline
 
     // Then: Should return true
     XCTAssertTrue(isAvailable)
@@ -215,7 +215,7 @@ class MovieSearchViewModelTests: XCTestCase {
     mockRepository.mockIsNetworkAvailable = false
 
     // When: Checking network availability
-    let isAvailable = viewModel.isNetworkAvailable()
+    let isAvailable = viewModel.isOnline
 
     // Then: Should return false
     XCTAssertFalse(isAvailable)
@@ -232,7 +232,7 @@ class MovieSearchViewModelTests: XCTestCase {
     // Then: ViewModel should detect the change
     // Note: This test would need to be run on main queue and with proper expectations
     // For now, we'll test the basic functionality
-    XCTAssertFalse(mockRepository.isNetworkAvailable())
+    XCTAssertFalse(mockRepository.mockIsNetworkAvailable)
   }
 
   func testNetworkStateChangeToOnline() {
@@ -243,7 +243,7 @@ class MovieSearchViewModelTests: XCTestCase {
     mockRepository.simulateNetworkChange(isAvailable: true)
 
     // Then: ViewModel should detect the change
-    XCTAssertTrue(mockRepository.isNetworkAvailable())
+    XCTAssertTrue(mockRepository.mockIsNetworkAvailable)
   }
 
   func testOfflineModeShowsCachedData() {
